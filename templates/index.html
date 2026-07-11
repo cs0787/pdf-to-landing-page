@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PDF to Static HTML Converter</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-50 min-h-screen flex flex-col justify-between">
+    <header class="bg-white shadow-sm border-b">
+        <div class="max-w-4xl mx-auto px-4 py-4 flex justify-between items-center">
+            <span class="text-xl font-bold text-indigo-600">PDF to Web</span>
+            <span class="text-sm text-gray-500">Design to static site pipeline</span>
+        </div>
+    </header>
+
+    <main class="max-w-4xl mx-auto px-4 py-12 flex-grow flex flex-col justify-center w-full">
+        <div class="bg-white rounded-2xl shadow-xl p-8 border border-gray-100">
+            <div class="text-center mb-8">
+                <h1 class="text-3xl font-bold text-gray-900 mb-2">Turn Your PDF Design into a Live Static Website</h1>
+                <p class="text-gray-600 max-w-lg mx-auto">Upload a designed PDF from Canva, Figma, or any software. We will compile it into a single HTML file that preserves the exact visual design and active hyperlinks.</p>
+            </div>
+
+            <!-- Error Alerts -->
+            {% with messages = get_flashed_messages() %}
+              {% if messages %}
+                <div class="mb-6 p-4 bg-red-50 text-red-700 rounded-lg border border-red-100">
+                  {% for message in messages %}
+                    <p class="text-sm">{{ message }}</p>
+                  {% endfor %}
+                </div>
+              {% endif %}
+            {% endwith %}
+
+            <form action="/" method="POST" enctype="multipart/form-data" class="space-y-6">
+                <!-- Drop Zone area -->
+                <div class="border-2 border-dashed border-gray-300 rounded-xl p-8 text-center hover:border-indigo-500 transition cursor-pointer relative" id="drop-zone">
+                    <input type="file" name="pdf_file" id="file-input" class="absolute inset-0 opacity-0 cursor-pointer" accept=".pdf" required>
+                    <div class="space-y-3" id="drop-prompt">
+                        <svg class="mx-auto h-12 w-12 text-gray-400" stroke="currentColor" fill="none" viewBox="0 0 48 48" aria-hidden="true">
+                            <path d="M28 8H12a4 4 0 00-4 4v20m32-12v8m0 0v8a4 4 0 01-4 4H12a4 4 0 01-4-4v-4m32-4l-3.172-3.172a4 4 0 00-5.656 0L28 28M8 32l9.172-9.172a4 4 0 015.656 0L28 28m0 0l4 4m4-24h8m-4-4v8m-12 4h.02" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+                        </svg>
+                        <div class="text-gray-600 font-medium">Click to upload or drag and drop your PDF</div>
+                        <p class="text-xs text-gray-500">Only PDF files are supported</p>
+                    </div>
+                    <div class="hidden text-indigo-600 font-semibold space-y-2" id="file-selected">
+                        <svg class="mx-auto h-12 w-12 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                        <span id="file-name" class="block text-lg truncate">Selected File</span>
+                    </div>
+                </div>
+
+                <!-- Customizations Options -->
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4 bg-gray-50 p-4 rounded-xl border border-gray-100">
+                    <div>
+                        <label for="zoom" class="block text-sm font-semibold text-gray-700">Display Resolution Quality</label>
+                        <select name="zoom" id="zoom" class="mt-1 block w-full rounded-lg border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 bg-white py-2 px-3 border">
+                            <option value="1.5">Standard (Recommended for long documents / smaller files)</option>
+                            <option value="2.0" selected>High (Crisp and clear representation on standard retina screens)</option>
+                            <option value="3.0">Ultra-High (Large file size, best for heavy vector graphics)</option>
+                        </select>
+                    </div>
+                    <div class="flex items-center text-sm text-gray-500">
+                        <p>Our tool packages the page files directly inside the code. This ensures layout bugs are bypassed entirely.</p>
+                    </div>
+                </div>
+
+                <button type="submit" class="w-full flex justify-center py-3 px-4 border border-transparent rounded-lg shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition">
+                    Convert & Download HTML Website Code
+                </button>
+            </form>
+        </div>
+    </main>
+
+    <footer class="bg-gray-100 border-t py-6 text-center text-sm text-gray-500">
+        <p>A zero-setup tool designed for code-free static site deployment.</p>
+    </footer>
+
+    <script>
+        const dropZone = document.getElementById('drop-zone');
+        const fileInput = document.getElementById('file-input');
+        const dropPrompt = document.getElementById('drop-prompt');
+        const fileSelected = document.getElementById('file-selected');
+        const fileName = document.getElementById('file-name');
+
+        fileInput.addEventListener('change', (e) => {
+            if (fileInput.files.length > 0) {
+                fileName.textContent = fileInput.files[0].name;
+                dropPrompt.classList.add('hidden');
+                fileSelected.classList.remove('hidden');
+            }
+        });
+
+        // Simple UX styling transitions during drag behaviors
+        ['dragenter', 'dragover'].forEach(eventName => {
+            dropZone.addEventListener(eventName, () => {
+                dropZone.classList.add('border-indigo-500', 'bg-indigo-50');
+            }, false);
+        });
+        ['dragleave', 'drop'].forEach(eventName => {
+            dropZone.addEventListener(eventName, () => {
+                dropZone.classList.remove('border-indigo-500', 'bg-indigo-50');
+            }, false);
+        });
+    </script>
+</body>
+</html>
