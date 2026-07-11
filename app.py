@@ -274,14 +274,14 @@ def compile_page_elements(doc, page_num, section_pages, zoom_factor, is_multipag
     # Set transition properties based on layout mode
     transition_attr = f'data-transition="{transition_effect}"' if (transition_effect and not is_multipage) else ''
     
-    # Formulate entry load animations (multi-page)
+    # Formulate entry load animations (multi-page separate documents)
     animation_style = ""
     left_animation = ""
     right_animation = ""
     if is_multipage and transition_effect:
         if transition_effect == "fade":
             animation_style = "animation: fadeIn 0.7s ease-out forwards;"
-        elif transition_effect == "slide-up":
+        elif transition_effect in ["slide-up", "sticky-cards"]:  # Sticky fallback for multipage
             animation_style = "animation: slideUpIn 0.7s cubic-bezier(0.25, 1, 0.5, 1) forwards;"
         elif transition_effect == "zoom-in":
             animation_style = "animation: zoomIn 0.7s cubic-bezier(0.25, 1, 0.5, 1) forwards;"
@@ -295,7 +295,7 @@ def compile_page_elements(doc, page_num, section_pages, zoom_factor, is_multipag
         elif transition_effect == "horizontal-snap":
             animation_style = "animation: horizontalSnapIn 0.8s cubic-bezier(0.25, 1, 0.5, 1) forwards;"
 
-    # 1. Handle Vertical Split-screen (Image duplicate with masked layouts)
+    # 1. Handle Vertical Split-screen (Clipped Columns)
     if transition_effect == "split-screen":
         img_elements = f"""
         <div class="left-half" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; overflow: hidden; clip-path: inset(0 50% 0 0); {left_animation}">
@@ -308,12 +308,14 @@ def compile_page_elements(doc, page_num, section_pages, zoom_factor, is_multipag
     else:
         img_elements = f'<img src="data:image/webp;base64,{img_base64}" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; display: block;" alt="Page {page_num}" {lazy_attr} />'
 
-    # 2. Handle Sticky Stacking cards layout parameters inline [2]
+    # 2. Handle Sticky Stacking cards [2]
     sticky_style = ""
     if transition_effect == "sticky-cards" and not is_multipage:
-        sticky_style = f"position: sticky; top: 0; z-index: {page_num}; box-shadow: 0 -15px 30px rgba(0,0,0,0.06);"
+        # z-index calculation maintains math stacking, shadow adds visual border
+        sticky_style = f"position: sticky; top: 0; z-index: {page_num}; box-shadow: 0 -15px 35px rgba(0,0,0,0.08);"
 
-    container_style = f"position: relative; width: 100%; max-width: {page_width}px; margin: 0 auto; background: #ffffff; {sticky_style} {animation_style}"
+    # Every page is relative and z-indexed so sequential overlapping remains mathematically correct
+    container_style = f"position: relative; width: 100%; max-width: {page_width}px; margin: 0 auto; background: #ffffff; z-index: {page_num}; {sticky_style} {animation_style}"
 
     return f"""
     <div id="page-{page_num}" class="page-container" {transition_attr} style="{container_style}">
@@ -329,11 +331,13 @@ def compile_page_elements(doc, page_num, section_pages, zoom_factor, is_multipag
 
 def get_base_styles():
     return """
-        html { scroll-behavior: smooth; }
-        body { margin: 0; padding: 0; background-color: #ffffff; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; overflow-x: hidden; }
+        html, body {
+            margin: 0; padding: 0; overflow-x: hidden; width: 100%; scroll-behavior: smooth; background-color: #ffffff;
+        }
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
         .page-container { border-radius: 0; box-shadow: none; }
         
-        /* 1. BUTTON HOVER EFFECTS [2] */
+        /* 1. HOVER EFFECTS FOR BUTTONS */
         .pdf-link { 
             cursor: pointer; 
             text-decoration: none; 
@@ -373,17 +377,24 @@ def get_base_styles():
         .form-submit-btn:hover { background-color: #1d4ed8; transform: translateY(-2px); box-shadow: 0 10px 15px -3px rgba(37, 99, 235, 0.3), 0 4px 6px -2px rgba(37, 99, 235, 0.15); }
         .form-submit-btn:active { transform: translateY(0); box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1); }
 
-        /* 3. ADVANCED TRANSITIONS (SCROLL OBSERVER ACTIONS) */
+        /* 3. DYNAMIC SCROLL TRANSITIONS */
         .page-container[data-transition] {
             transition: all 0.9s cubic-bezier(0.25, 1, 0.5, 1);
             will-change: transform, opacity, clip-path;
         }
         
-        /* 1. Clip-Path Reveal */
+        /* Disable parent container transition for split-screen to prevent double animation conflicts */
+        html.js-enabled .page-container[data-transition="split-screen"] {
+            opacity: 1 !important;
+            transform: none !important;
+            clip-path: none !important;
+        }
+        
+        /* Clip-Path Reveal */
         html.js-enabled .page-container[data-transition="clip-reveal"] { clip-path: circle(0% at 50% 50%); }
         html.js-enabled .page-container[data-transition="clip-reveal"].is-visible { clip-path: circle(150% at 50% 50%); }
         
-        /* 2. Vertical Split-Screen */
+        /* Vertical Split-Screen Columns */
         html.js-enabled .page-container[data-transition="split-screen"] .left-half {
             transform: translateY(-80px); opacity: 0;
             transition: transform 0.9s cubic-bezier(0.25, 1, 0.5, 1), opacity 0.9s ease-out;
@@ -396,7 +407,7 @@ def get_base_styles():
         }
         html.js-enabled .page-container[data-transition="split-screen"].is-visible .right-half { transform: translateY(0); opacity: 1; }
         
-        /* 3. Horizontal Scroll Snap */
+        /* Horizontal Scroll Snap */
         html.js-enabled .page-container[data-transition="horizontal-snap"] { transform: translateX(100%); opacity: 0; }
         html.js-enabled .page-container[data-transition="horizontal-snap"].is-visible { transform: translateX(0); opacity: 1; }
 
@@ -413,7 +424,7 @@ def get_base_styles():
         html.js-enabled .page-container[data-transition="reveal"] { clip-path: inset(100% 0 0 0); }
         html.js-enabled .page-container[data-transition="reveal"].is-visible { clip-path: inset(0 0 0 0); }
 
-        /* Multi-page on-load dynamic frames */
+        /* Multi-page load animations */
         @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
         @keyframes slideUpIn { from { opacity: 0; transform: translateY(50px); } to { opacity: 1; transform: translateY(0); } }
         @keyframes zoomIn { from { opacity: 0; transform: scale(0.93); } to { opacity: 1; transform: scale(1); } }
@@ -444,7 +455,7 @@ def index():
                 ga_id = request.form.get('ga_id', '').strip()
                 form_action = request.form.get('form_action', '').strip()
                 
-                # Fetch custom parameters lists
+                # Fetch custom arrays
                 from_pages = request.form.getlist('from_page[]')
                 to_pages = request.form.getlist('to_page[]')
                 effects = request.form.getlist('effect[]')
@@ -461,7 +472,7 @@ def index():
                 doc = fitz.open(stream=pdf_bytes, filetype="pdf")
                 section_pages = index_document_sections(doc)
                 
-                # Google Tag configurations
+                # Google Analytics tag script injection
                 ga_script = f"""
                 <script async src="https://www.googletagmanager.com/gtag/js?id={ga_id}"></script>
                 <script>
@@ -471,7 +482,7 @@ def index():
                 </script>
                 """ if ga_id else ""
                 
-                # Global Form elements
+                # Global Form structures
                 form_open = f'<form action="{form_action}" method="POST" style="margin:0;padding:0;">' if form_action else ''
                 form_close = '</form>' if form_action else ''
 
@@ -499,7 +510,7 @@ def index():
     </main>
     {form_close}
     
-    <!-- IntersectionObserver viewport controller -->
+    <!-- Observer viewport controller with clean-up engine [3] -->
     <script>
     document.documentElement.classList.add('js-enabled');
     document.addEventListener("DOMContentLoaded", () => {{
@@ -511,8 +522,23 @@ def index():
         const observer = new IntersectionObserver((entries, observer) => {{
             entries.forEach(entry => {{
                 if (entry.isIntersecting) {{
-                    entry.target.classList.add("is-visible");
-                    observer.unobserve(entry.target);
+                    const target = entry.target;
+                    target.classList.add("is-visible");
+                    
+                    // Post-animation cleanup (1000ms): clears active transform properties 
+                    // to prevent stacking-context conflicts with neighboring sticky cards [2,3]
+                    setTimeout(() => {{
+                        const leftHalf = target.querySelector('.left-half');
+                        const rightHalf = target.querySelector('.right-half');
+                        if (leftHalf) leftHalf.style.transform = "none";
+                        if (rightHalf) rightHalf.style.transform = "none";
+                        
+                        target.style.transform = "none";
+                        target.style.clipPath = "none";
+                        target.style.opacity = "1";
+                    }}, 1000);
+                    
+                    observer.unobserve(target);
                 }}
             }});
         }}, observerOptions);
