@@ -1,7 +1,7 @@
 import os
 import re
 import base64
-from flask import Flask, request, render_template, send_file, redirect, url_for, flash
+from flask import Flask, request, render_template, send_file, redirect, url_for, flash, Response
 import fitz  # PyMuPDF
 from io import BytesIO
 
@@ -9,24 +9,22 @@ app = Flask(__name__)
 app.secret_key = 'pdf_converter_secret_key'
 app.config['MAX_CONTENT_LENGTH'] = 50 * 1024 * 1024  # Limit uploads to 50MB
 
-# Helper to check if two bounding boxes overlap (to avoid duplicating native links)
+# Helper to check if two bounding boxes overlap (to prioritize manual design links)
 def rects_overlap(r1, r2):
     return not (r1.x1 <= r2.x0 or r2.x1 <= r1.x0 or r1.y1 <= r2.y0 or r2.y1 <= r1.y0)
 
-# 1. Smart Navigation Router: Index which pages represent which topics
+# 1. Topic Scanner: Scores each page to locate matching website sections
 def index_document_sections(doc):
     section_pages = {
         "home": 1,
         "about": 1,
         "services": 1,
-        "features": 1,
-        "contact": len(doc),  # Default contact to the last page of the site
         "pricing": 1,
         "portfolio": 1,
+        "contact": len(doc),  # Default contact to the last page
     }
     
-    # Analyze text on pages to find the most relevant section pages
-    scores = {key: [0] * len(doc) for key in ["about", "services", "features", "contact", "pricing", "portfolio"]}
+    scores = {key: [0] * len(doc) for key in ["about", "services", "pricing", "portfolio", "contact"]}
     
     for page_num in range(len(doc)):
         page = doc[page_num]
@@ -34,37 +32,41 @@ def index_document_sections(doc):
         
         for key in scores.keys():
             count = text.count(key)
-            # Give heavier relevance scores to distinct section phrases
             if key == "about" and "about us" in text:
                 count += 5
             if key == "contact" and "contact us" in text:
                 count += 5
             if key == "services" and "our services" in text:
                 count += 5
+            if key == "pricing" and "pricing plans" in text:
+                count += 5
                 
             scores[key][page_num] = count
             
-    # Map each section to the highest-scoring page index
+    # Assign the most relevant page for each topic section
     for key, page_scores in scores.items():
         max_score = max(page_scores)
         if max_score > 0:
-            best_page = page_scores.index(max_score) + 1  # 1-based index
+            best_page = page_scores.index(max_score) + 1  # 1-based page index
             section_pages[key] = best_page
             
     return section_pages
 
-# 2. Extract Plain Text URLs and Emails from the Page
-def extract_raw_text_urls(page):
+# 2. Extract Plain Text URLs, Emails, and Phone Numbers
+def extract_raw_text_utilities(page):
     detected = []
-    words = page.get_text("words")  # Returns layout (x0, y0, x1, y1, "text", block_no, line_no, word_no)
+    text_content = page.get_text()
     
-    # Pattern structures for links and emails
+    # Matching expressions
     url_pattern = re.compile(
         r'^(https?://)?(www\.)?([a-zA-Z0-9\-]+\.)+[a-zA-Z]{2,6}(/[a-zA-Z0-9\-._~:/?#\[\]@!$&\'()*+,;=]*)?$',
         re.IGNORECASE
     )
     email_pattern = re.compile(r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,6}$', re.IGNORECASE)
+    phone_pattern = re.compile(r'\b(?:\+?\d{1,3}[-.\s]?)?\(?\d{3}\)?[-.\s]?\d{3}[-.\s]?\d{4}\b')
     
+    # Process regular words layout
+    words = page.get_text("words")
     for w in words:
         x0, y0, x1, y1, text, _, _, _ = w
         clean_text = text.strip().strip(",.()[]{}:;\"'!?*")
@@ -72,7 +74,7 @@ def extract_raw_text_urls(page):
         if len(clean_text) < 4:
             continue
             
-        # Match against web addresses
+        # Match Web Addresses
         if url_pattern.match(clean_text) or clean_text.startswith("www.") or clean_text.startswith("http"):
             href = clean_text
             if not href.startswith("http://") and not href.startswith("https://"):
@@ -82,50 +84,114 @@ def extract_raw_text_urls(page):
                 "href": href,
                 "target": 'target="_blank"'
             })
-        # Match against emails
+        # Match Email Addresses
         elif email_pattern.match(clean_text) or ("@" in clean_text and "." in clean_text):
             detected.append({
                 "rect": fitz.Rect(x0, y0, x1, y1),
                 "href": f"mailto:{clean_text}",
                 "target": ""
             })
+
+    # Match Phone Numbers across the page text
+    phones = phone_pattern.findall(text_content)
+    for num in set(phones):
+        rects = page.search_for(num)
+        for rect in rects:
+            # Clean non-numeric characters for tel link protocol
+            clean_num = re.sub(r'[^\d+]', '', num)
+            detected.append({
+                "rect": rect,
+                "href": f"tel:{clean_num}",
+                "target": ""
+            })
             
     return detected
 
-# 3. Detect Menu/Button Navigation Labels on the page
-def detect_button_phrases(page, section_pages):
+# 3. Intelligent Button Intent Resolver
+def detect_smart_button_intents(page, section_pages):
     detected = []
     current_page = page.number + 1
     
-    # Layout Navigation Triggers -> mapped targets
-    nav_triggers = {
-        "home": ["home", "welcome"],
-        "about": ["about us", "about", "who we are", "our story"],
-        "services": ["services", "what we do", "our services", "features"],
-        "pricing": ["pricing", "plans", "pricing plans"],
-        "portfolio": ["portfolio", "our work", "projects"],
-        "contact": ["contact us", "contact", "get in touch", "email us"]
+    # Maps specific CTA button phrases to a matching section destination
+    intent_map = {
+        # Section Anchors
+        "home": "home",
+        "welcome": "home",
+        "about us": "about",
+        "about": "about",
+        "who we are": "about",
+        "our story": "about",
+        "services": "services",
+        "what we do": "services",
+        "our services": "services",
+        "features": "services",
+        "pricing": "pricing",
+        "plans": "pricing",
+        "pricing plans": "pricing",
+        "portfolio": "portfolio",
+        "our work": "portfolio",
+        "projects": "portfolio",
+        "contact us": "contact",
+        "contact": "contact",
+        "get in touch": "contact",
+        "email us": "contact",
+        "back to top": "home",
+        
+        # Call-To-Action (CTA) Intent Routing
+        "get started": "contact",     # Lead to contact/booking form
+        "register": "contact",        # Lead to contact/booking form
+        "join now": "contact",
+        "join": "contact",
+        "apply now": "contact",
+        "apply": "contact",
+        "book now": "contact",        # Lead to booking form
+        "book a call": "contact",
+        "buy now": "pricing",         # Lead to checkout or plans pricing
+        "subscribe": "contact",
+        "shop now": "services",       # Lead to catalog/services list
+        "shop": "services",
+        "download": "contact",
+        "download now": "contact",
+        "learn more": "about",        # Lead to background information section
+        "read more": "about",
     }
     
-    for section_name, phrases in nav_triggers.items():
-        target_page = section_pages.get(section_name)
+    # Scan page for active button trigger phrases
+    for phrase, target_section in intent_map.items():
+        target_page = section_pages.get(target_section)
         if not target_page:
             continue
             
-        # Avoid linking pages to themselves (e.g. "About" heading on Page 2 shouldn't navigate to Page 2)
-        # Exception is Page 1, which typically contains header navigation menus
+        # Avoid linking a section header back to itself on deep pages (e.g., Contact heading on Page 5)
         if current_page == target_page and current_page != 1:
             continue
             
-        for phrase in phrases:
-            matches = page.search_for(phrase)  # Case-insensitive by default
-            for rect in matches:
-                detected.append({
-                    "rect": rect,
-                    "href": f"#page-{target_page}",
-                    "target": ""
-                })
-                
+        matches = page.search_for(phrase)
+        for rect in matches:
+            detected.append({
+                "rect": rect,
+                "href": f"#page-{target_page}",
+                "target": ""
+            })
+            
+    # Auto-Route Unlinked Social Platform Mentions
+    social_platforms = {
+        "facebook": "https://facebook.com",
+        "instagram": "https://instagram.com",
+        "twitter": "https://twitter.com",
+        "linkedin": "https://linkedin.com",
+        "github": "https://github.com",
+        "youtube": "https://youtube.com"
+    }
+    for platform, url in social_platforms.items():
+        matches = page.search_for(platform)
+        for rect in matches:
+            detected.append({
+                "rect": rect,
+                "href": url,
+                "target": 'target="_blank"'
+            })
+            
     return detected
 
 
@@ -133,7 +199,7 @@ def convert_pdf_to_html(pdf_bytes, zoom_factor=2.0):
     doc = fitz.open(stream=pdf_bytes, filetype="pdf")
     pages_html = []
     
-    # Pre-index navigation sections across the entire PDF
+    # Pass 1: Build the global document sections map
     section_pages = index_document_sections(doc)
     
     for page_num in range(len(doc)):
@@ -142,7 +208,7 @@ def convert_pdf_to_html(pdf_bytes, zoom_factor=2.0):
         page_height = page.rect.height
         aspect_ratio = (page_height / page_width) * 100
         
-        # 1. Collect Manual/Native PDF Links first (highest priority)
+        # 1. Harvest native links (Highest Priority)
         existing_links = page.get_links()
         active_links = []
         existing_rects = []
@@ -167,23 +233,21 @@ def convert_pdf_to_html(pdf_bytes, zoom_factor=2.0):
                     "target": target
                 })
                 
-        # 2. Auto-Detect Plain Text URLs / Emails
-        raw_urls = extract_raw_text_urls(page)
-        for url_link in raw_urls:
-            # Only add if it doesn't collide with existing manual links
-            if not any(rects_overlap(url_link["rect"], r) for r in existing_rects):
-                active_links.append(url_link)
-                existing_rects.append(url_link["rect"])
+        # 2. Harvest plain text web links, email links, and phone numbers
+        utilities = extract_raw_text_utilities(page)
+        for item in utilities:
+            if not any(rects_overlap(item["rect"], r) for r in existing_rects):
+                active_links.append(item)
+                existing_rects.append(item["rect"])
                 
-        # 3. Auto-Detect "Button" Phrases (like Home, Contact Us, About Us)
-        button_links = detect_button_phrases(page, section_pages)
-        for btn in button_links:
-            # Only add if it doesn't collide with existing links or URLs
+        # 3. Harvest smart button intent targets (CTA phrases)
+        smart_buttons = detect_smart_button_intents(page, section_pages)
+        for btn in smart_buttons:
             if not any(rects_overlap(btn["rect"], r) for r in existing_rects):
                 active_links.append(btn)
                 existing_rects.append(btn["rect"])
 
-        # Compile CSS percentage overlays for all finalized links
+        # Map active hyperlinks to precise percentage-based layouts
         link_overlays = []
         for l in active_links:
             rect = l["rect"]
@@ -205,7 +269,7 @@ def convert_pdf_to_html(pdf_bytes, zoom_factor=2.0):
         
         links_html = "\n".join(link_overlays)
         
-        # Render high-resolution page layout
+        # Render clean graphics for this page layer
         mat = fitz.Matrix(zoom_factor, zoom_factor)
         pix = page.get_pixmap(matrix=mat)
         img_data = pix.tobytes("png")
@@ -248,7 +312,7 @@ def convert_pdf_to_html(pdf_bytes, zoom_factor=2.0):
             transition: background-color 0.15s ease-in-out;
         }}
         .pdf-link:hover {{
-            background-color: rgba(59, 130, 246, 0.15); /* Modern soft blue hover box */
+            background-color: rgba(59, 130, 246, 0.12); /* Modern soft blue hover box */
             outline: 1.5px dashed rgba(59, 130, 246, 0.6);
         }}
     </style>
@@ -279,12 +343,17 @@ def index():
                 pdf_bytes = file.read()
                 html_code = convert_pdf_to_html(pdf_bytes, zoom_factor=zoom)
                 
-                return send_file(
-                    BytesIO(html_code.encode('utf-8')),
-                    mimetype='text/html',
-                    as_attachment=True,
-                    download_name=f"{os.path.splitext(file.filename)[0]}.html"
+                safe_filename = f"{os.path.splitext(file.filename)[0]}.html"
+                
+                response = Response(
+                    html_code.encode('utf-8'),
+                    mimetype='application/octet-stream',
+                    headers={
+                        'Content-Disposition': f'attachment; filename="{safe_filename}"'
+                    }
                 )
+                return response
+                
             except Exception as e:
                 flash(f"Error converting file: {str(e)}")
                 return redirect(request.url)
