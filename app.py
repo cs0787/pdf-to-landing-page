@@ -273,7 +273,11 @@ def compile_page_elements(doc, page_num, section_pages, zoom_factor, is_multipag
     
     # Set transition properties based on layout mode
     transition_attr = f'data-transition="{transition_effect}"' if (transition_effect and not is_multipage) else ''
+    
+    # Formulate entry load animations (multi-page)
     animation_style = ""
+    left_animation = ""
+    right_animation = ""
     if is_multipage and transition_effect:
         if transition_effect == "fade":
             animation_style = "animation: fadeIn 0.7s ease-out forwards;"
@@ -283,11 +287,38 @@ def compile_page_elements(doc, page_num, section_pages, zoom_factor, is_multipag
             animation_style = "animation: zoomIn 0.7s cubic-bezier(0.25, 1, 0.5, 1) forwards;"
         elif transition_effect == "reveal":
             animation_style = "animation: revealIn 0.7s cubic-bezier(0.25, 1, 0.5, 1) forwards;"
+        elif transition_effect == "clip-reveal":
+            animation_style = "animation: clipRevealIn 0.9s cubic-bezier(0.25, 1, 0.5, 1) forwards;"
+        elif transition_effect == "split-screen":
+            left_animation = "animation: splitLeft 0.8s cubic-bezier(0.25, 1, 0.5, 1) forwards;"
+            right_animation = "animation: splitRight 0.8s cubic-bezier(0.25, 1, 0.5, 1) forwards;"
+        elif transition_effect == "horizontal-snap":
+            animation_style = "animation: horizontalSnapIn 0.8s cubic-bezier(0.25, 1, 0.5, 1) forwards;"
+
+    # 1. Handle Vertical Split-screen (Image duplicate with masked layouts)
+    if transition_effect == "split-screen":
+        img_elements = f"""
+        <div class="left-half" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; overflow: hidden; clip-path: inset(0 50% 0 0); {left_animation}">
+            <img src="data:image/webp;base64,{img_base64}" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; display: block;" alt="Page {page_num} Left" />
+        </div>
+        <div class="right-half" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; overflow: hidden; clip-path: inset(0 0 0 50%); {right_animation}">
+            <img src="data:image/webp;base64,{img_base64}" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; display: block;" alt="Page {page_num} Right" />
+        </div>
+        """
+    else:
+        img_elements = f'<img src="data:image/webp;base64,{img_base64}" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; display: block;" alt="Page {page_num}" {lazy_attr} />'
+
+    # 2. Handle Sticky Stacking cards layout parameters inline [2]
+    sticky_style = ""
+    if transition_effect == "sticky-cards" and not is_multipage:
+        sticky_style = f"position: sticky; top: 0; z-index: {page_num}; box-shadow: 0 -15px 30px rgba(0,0,0,0.06);"
+
+    container_style = f"position: relative; width: 100%; max-width: {page_width}px; margin: 0 auto; background: #ffffff; {sticky_style} {animation_style}"
 
     return f"""
-    <div id="page-{page_num}" class="page-container" {transition_attr} style="position: relative; width: 100%; max-width: {page_width}px; margin: 0 auto; background: #ffffff; {animation_style}">
+    <div id="page-{page_num}" class="page-container" {transition_attr} style="{container_style}">
         <div style="padding-top: {aspect_ratio}%;"></div>
-        <img src="data:image/webp;base64,{img_base64}" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; display: block;" alt="Page {page_num}" {lazy_attr} />
+        {img_elements}
         <div class="interactive-overlay" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%;">
             {"".join(link_overlays)}
             {forms_layer}
@@ -302,7 +333,7 @@ def get_base_styles():
         body { margin: 0; padding: 0; background-color: #ffffff; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; overflow-x: hidden; }
         .page-container { border-radius: 0; box-shadow: none; }
         
-        /* 1. HOVER EFFECTS FOR BUTTONS */
+        /* 1. BUTTON HOVER EFFECTS [2] */
         .pdf-link { 
             cursor: pointer; 
             text-decoration: none; 
@@ -342,11 +373,34 @@ def get_base_styles():
         .form-submit-btn:hover { background-color: #1d4ed8; transform: translateY(-2px); box-shadow: 0 10px 15px -3px rgba(37, 99, 235, 0.3), 0 4px 6px -2px rgba(37, 99, 235, 0.15); }
         .form-submit-btn:active { transform: translateY(0); box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1); }
 
-        /* 3. SCROLL TRANSITIONS CSS MAP */
+        /* 3. ADVANCED TRANSITIONS (SCROLL OBSERVER ACTIONS) */
         .page-container[data-transition] {
-            transition: all 0.8s cubic-bezier(0.25, 1, 0.5, 1);
+            transition: all 0.9s cubic-bezier(0.25, 1, 0.5, 1);
             will-change: transform, opacity, clip-path;
         }
+        
+        /* 1. Clip-Path Reveal */
+        html.js-enabled .page-container[data-transition="clip-reveal"] { clip-path: circle(0% at 50% 50%); }
+        html.js-enabled .page-container[data-transition="clip-reveal"].is-visible { clip-path: circle(150% at 50% 50%); }
+        
+        /* 2. Vertical Split-Screen */
+        html.js-enabled .page-container[data-transition="split-screen"] .left-half {
+            transform: translateY(-80px); opacity: 0;
+            transition: transform 0.9s cubic-bezier(0.25, 1, 0.5, 1), opacity 0.9s ease-out;
+        }
+        html.js-enabled .page-container[data-transition="split-screen"].is-visible .left-half { transform: translateY(0); opacity: 1; }
+        
+        html.js-enabled .page-container[data-transition="split-screen"] .right-half {
+            transform: translateY(80px); opacity: 0;
+            transition: transform 0.9s cubic-bezier(0.25, 1, 0.5, 1), opacity 0.9s ease-out;
+        }
+        html.js-enabled .page-container[data-transition="split-screen"].is-visible .right-half { transform: translateY(0); opacity: 1; }
+        
+        /* 3. Horizontal Scroll Snap */
+        html.js-enabled .page-container[data-transition="horizontal-snap"] { transform: translateX(100%); opacity: 0; }
+        html.js-enabled .page-container[data-transition="horizontal-snap"].is-visible { transform: translateX(0); opacity: 1; }
+
+        /* Standard scroll transitions */
         html.js-enabled .page-container[data-transition="fade"] { opacity: 0; }
         html.js-enabled .page-container[data-transition="fade"].is-visible { opacity: 1; }
         
@@ -359,11 +413,15 @@ def get_base_styles():
         html.js-enabled .page-container[data-transition="reveal"] { clip-path: inset(100% 0 0 0); }
         html.js-enabled .page-container[data-transition="reveal"].is-visible { clip-path: inset(0 0 0 0); }
 
-        /* Multi-page load animators */
+        /* Multi-page on-load dynamic frames */
         @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
         @keyframes slideUpIn { from { opacity: 0; transform: translateY(50px); } to { opacity: 1; transform: translateY(0); } }
         @keyframes zoomIn { from { opacity: 0; transform: scale(0.93); } to { opacity: 1; transform: scale(1); } }
         @keyframes revealIn { from { clip-path: inset(100% 0 0 0); } to { clip-path: inset(0 0 0 0); } }
+        @keyframes clipRevealIn { from { clip-path: circle(0% at 50% 50%); } to { clip-path: circle(150% at 50% 50%); } }
+        @keyframes splitLeft { from { transform: translateY(-60px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+        @keyframes splitRight { from { transform: translateY(60px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+        @keyframes horizontalSnapIn { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
     """
 
 @app.route('/', methods=['GET', 'POST'])
@@ -386,7 +444,7 @@ def index():
                 ga_id = request.form.get('ga_id', '').strip()
                 form_action = request.form.get('form_action', '').strip()
                 
-                # Fetch User's Transition Rules arrays
+                # Fetch custom parameters lists
                 from_pages = request.form.getlist('from_page[]')
                 to_pages = request.form.getlist('to_page[]')
                 effects = request.form.getlist('effect[]')
@@ -403,7 +461,7 @@ def index():
                 doc = fitz.open(stream=pdf_bytes, filetype="pdf")
                 section_pages = index_document_sections(doc)
                 
-                # Analytics tracking
+                # Google Tag configurations
                 ga_script = f"""
                 <script async src="https://www.googletagmanager.com/gtag/js?id={ga_id}"></script>
                 <script>
@@ -413,7 +471,7 @@ def index():
                 </script>
                 """ if ga_id else ""
                 
-                # Global Form structures
+                # Global Form elements
                 form_open = f'<form action="{form_action}" method="POST" style="margin:0;padding:0;">' if form_action else ''
                 form_close = '</form>' if form_action else ''
 
@@ -441,7 +499,7 @@ def index():
     </main>
     {form_close}
     
-    <!-- IntersectionObserver handler for single scroll animations -->
+    <!-- IntersectionObserver viewport controller -->
     <script>
     document.documentElement.classList.add('js-enabled');
     document.addEventListener("DOMContentLoaded", () => {{
