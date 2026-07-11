@@ -11,7 +11,7 @@
         <div class="max-w-5xl mx-auto px-6 py-4 flex justify-between items-center">
             <div class="flex items-center gap-3">
                 <span class="text-2xl font-black text-indigo-600 tracking-tight">PDF2Web Studio</span>
-                <span class="text-xs bg-indigo-50 text-indigo-700 px-3 py-1 rounded-full font-semibold">v2.0 Pro</span>
+                <span class="text-xs bg-indigo-50 text-indigo-700 px-3 py-1 rounded-full font-semibold">v3.0 Transition-Pro</span>
             </div>
             <span class="text-xs text-slate-400">Zero-Code Deployment</span>
         </div>
@@ -19,11 +19,12 @@
 
     <main class="max-w-5xl mx-auto px-6 py-10 w-full flex-grow">
         <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
-            <!-- Form Parameters Panel (Left Column) -->
+            
+            <!-- Left Column: Settings & Configs -->
             <form action="/" method="POST" enctype="multipart/form-data" class="lg:col-span-2 bg-white rounded-2xl shadow-md border border-slate-100 p-8 space-y-6">
                 <div>
                     <h1 class="text-2xl font-bold text-slate-800">Visual Site Builder Configuration</h1>
-                    <p class="text-sm text-slate-500 mt-1">Upload your Canva, Figma, or design layout to package it into a static-ready code bundle.</p>
+                    <p class="text-sm text-slate-500 mt-1">Upload your Canva or Figma design layouts to package them with high-fidelity transitions.</p>
                 </div>
 
                 {% with messages = get_flashed_messages() %}
@@ -34,7 +35,7 @@
                   {% endif %}
                 {% endwith %}
 
-                <!-- PDF File Upload Drop Zone -->
+                <!-- File Drop Zone -->
                 <div class="border-2 border-dashed border-slate-200 rounded-xl p-8 text-center hover:border-indigo-500 hover:bg-slate-50/50 transition cursor-pointer relative" id="drop-zone">
                     <input type="file" name="pdf_file" id="file-input" class="absolute inset-0 opacity-0 cursor-pointer" accept=".pdf" required>
                     <div class="space-y-3" id="drop-prompt">
@@ -49,7 +50,6 @@
                 </div>
 
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <!-- Layout Mode Selector -->
                     <div>
                         <label class="block text-sm font-semibold text-slate-700">Site Directory Structure</label>
                         <select name="layout_mode" class="mt-1 block w-full rounded-lg border-slate-200 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 bg-white py-2.5 px-3 border text-sm">
@@ -57,7 +57,6 @@
                             <option value="multipage">Multi-Page Independent Files (.zip directory)</option>
                         </select>
                     </div>
-                    <!-- Resolution Selector -->
                     <div>
                         <label class="block text-sm font-semibold text-slate-700">Image Asset Quality (WebP)</label>
                         <select name="zoom" class="mt-1 block w-full rounded-lg border-slate-200 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 bg-white py-2.5 px-3 border text-sm">
@@ -65,6 +64,23 @@
                             <option value="2.0" selected>High-Definition 2x (Retina-sharp / Recommended)</option>
                             <option value="3.0">Ultra-High 3x (Heavy asset size / Crystal-clear graphics)</option>
                         </select>
+                    </div>
+                </div>
+
+                <!-- 1. DYNAMIC PAGE TRANSITIONS BUILDER -->
+                <div class="border-t border-slate-100 pt-6 space-y-4">
+                    <div class="flex justify-between items-center">
+                        <div class="space-y-0.5">
+                            <h3 class="text-sm font-semibold text-slate-800 tracking-wide uppercase">Page Transition Rules</h3>
+                            <p class="text-xs text-slate-400">Configure visual animations when navigating between pages.</p>
+                        </div>
+                        <button type="button" id="add-transition-btn" class="text-xs bg-indigo-50 text-indigo-700 hover:bg-indigo-100 px-3 py-2 rounded-lg font-bold transition">
+                            + Add Transition Rule
+                        </button>
+                    </div>
+                    
+                    <div id="transitions-container" class="space-y-2">
+                        <!-- Javascript generates rows here dynamically -->
                     </div>
                 </div>
 
@@ -100,37 +116,37 @@
                 </button>
             </form>
 
-            <!-- Guide Panel (Right Column) -->
+            <!-- Right Column: Interactive Designer Guide -->
             <div class="bg-white rounded-2xl shadow-md border border-slate-100 p-8 space-y-6">
                 <div>
-                    <h3 class="text-lg font-bold text-slate-800">Interactive Designer Guide</h3>
-                    <p class="text-xs text-slate-500 mt-1">Design layouts inside Canva, Figma, or Sketch and insert these placeholder tags into normal text blocks to render functional elements.</p>
+                    <h3 class="text-lg font-bold text-slate-800">Designer Guidelines</h3>
+                    <p class="text-xs text-slate-500 mt-1">Type these placeholder tags directly into text blocks within Canva or Figma to generate active dynamic form components.</p>
                 </div>
 
                 <div class="space-y-4">
                     <div class="p-4 bg-indigo-50/50 rounded-xl border border-indigo-100/50 space-y-2">
                         <span class="text-xs font-extrabold text-indigo-700 tracking-wide uppercase">Form Text Inputs</span>
-                        <p class="text-xs text-slate-600 leading-relaxed">Place this exact placeholder block over a designed input field shape:</p>
+                        <p class="text-xs text-slate-600 leading-relaxed">Place this over a designed input box:</p>
                         <code class="block text-[11px] bg-slate-900 text-indigo-300 p-2 rounded font-mono break-all">[input:text:Your Name]</code>
                     </div>
 
                     <div class="p-4 bg-indigo-50/50 rounded-xl border border-indigo-100/50 space-y-2">
                         <span class="text-xs font-extrabold text-indigo-700 tracking-wide uppercase">Email Fields</span>
-                        <p class="text-xs text-slate-600 leading-relaxed font-sans">Place this over your email address input field box:</p>
+                        <p class="text-xs text-slate-600 leading-relaxed font-sans">Place this over your email box:</p>
                         <code class="block text-[11px] bg-slate-900 text-indigo-300 p-2 rounded font-mono break-all">[input:email:Your Email]</code>
                     </div>
 
                     <div class="p-4 bg-indigo-50/50 rounded-xl border border-indigo-100/50 space-y-2">
-                        <span class="text-xs font-extrabold text-indigo-700 tracking-wide uppercase">Submit Button overlay</span>
-                        <p class="text-xs text-slate-600 leading-relaxed">Place this directly inside your design's button shape:</p>
+                        <span class="text-xs font-extrabold text-indigo-700 tracking-wide uppercase">Submit Button</span>
+                        <p class="text-xs text-slate-600 leading-relaxed">Place this inside your button shape:</p>
                         <code class="block text-[11px] bg-slate-900 text-indigo-300 p-2 rounded font-mono break-all">[submit:Send Message]</code>
                     </div>
 
                     <div class="p-4 bg-emerald-50/50 rounded-xl border border-emerald-100/50 space-y-1.5">
                         <span class="text-xs font-extrabold text-emerald-700 tracking-wide uppercase">Core Enhancements</span>
                         <ul class="text-[11px] text-slate-600 list-disc pl-4 space-y-1">
-                            <li>Images are compiled as compressed WebP files instead of heavy PNGs.</li>
-                            <li>Text search (Ctrl+F) and text copying are enabled via transparent overlays [1].</li>
+                            <li>Glassmorphic button brighten and 3D lift hover effects are pre-compiled [2].</li>
+                            <li>Text search (Ctrl+F) and text copying are fully active via transparent DOM overlays [1].</li>
                             <li>Lazy loading is active below the fold.</li>
                         </ul>
                     </div>
@@ -168,6 +184,43 @@
                 dropZone.classList.remove('border-indigo-500', 'bg-indigo-50/50');
             }, false);
         });
+
+        // DYNAMIC PAGE TRANSITION GENERATOR
+        const container = document.getElementById('transitions-container');
+        const addBtn = document.getElementById('add-transition-btn');
+
+        function createTransitionRow() {
+            const row = document.createElement('div');
+            row.className = "flex flex-wrap items-center gap-3 bg-slate-50 p-3 rounded-lg border border-slate-200/60 transition-row";
+            row.innerHTML = `
+                <div class="flex items-center gap-1.5 text-xs text-slate-600">
+                    <span>From Page</span>
+                    <input type="number" name="from_page[]" min="1" placeholder="1" required class="w-16 rounded border-slate-200 py-1 px-2 text-center text-sm focus:border-indigo-500 focus:ring-indigo-500">
+                </div>
+                <div class="flex items-center gap-1.5 text-xs text-slate-600">
+                    <span>to Page</span>
+                    <input type="number" name="to_page[]" min="2" placeholder="2" required class="w-16 rounded border-slate-200 py-1 px-2 text-center text-sm focus:border-indigo-500 focus:ring-indigo-500">
+                </div>
+                <div class="flex-grow min-w-[150px]">
+                    <select name="effect[]" class="w-full rounded border-slate-200 py-1 px-2 text-xs focus:border-indigo-500 focus:ring-indigo-500 bg-white">
+                        <option value="fade">Fade In (Graceful dissolve)</option>
+                        <option value="slide-up">Slide Up & Fade (Parallax motion)</option>
+                        <option value="zoom-in">Zoom In (Fluid depth zoom)</option>
+                        <option value="reveal">Wipe Reveal (Bottom-to-top mask)</option>
+                    </select>
+                </div>
+                <button type="button" class="remove-row-btn text-rose-500 hover:text-rose-700 p-1">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
+                </button>
+            `;
+            
+            row.querySelector('.remove-row-btn').addEventListener('click', () => {
+                row.remove();
+            });
+            container.appendChild(row);
+        }
+
+        addBtn.addEventListener('click', createTransitionRow);
     </script>
 </body>
 </html>

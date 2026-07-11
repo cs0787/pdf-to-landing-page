@@ -14,7 +14,7 @@ app.config['MAX_CONTENT_LENGTH'] = 50 * 1024 * 1024  # Limit uploads to 50MB
 def rects_overlap(r1, r2):
     return not (r1.x1 <= r2.x0 or r2.x1 <= r1.x0 or r1.y1 <= r2.y0 or r2.y1 <= r1.y0)
 
-# 1. Page Indexing: Scans PDF pages to find topic relevance
+# 1. Topic Scanner: Scores each page to locate matching website sections
 def index_document_sections(doc):
     section_pages = {
         "home": 1,
@@ -22,7 +22,7 @@ def index_document_sections(doc):
         "services": 1,
         "pricing": 1,
         "portfolio": 1,
-        "contact": len(doc),
+        "contact": len(doc),  # Default contact to the last page
     }
     scores = {key: [0] * len(doc) for key in ["about", "services", "pricing", "portfolio", "contact"]}
     
@@ -54,7 +54,7 @@ def get_page_filename(page_num, section_pages):
             return f"{section}.html"
     return f"page-{page_num}.html"
 
-# 3. Dynamic Form Field & Submit Overlays via design placeholders
+# 3. Dynamic Form Field & Submit Overlays
 def generate_form_fields_layer(page, page_width, page_height):
     fields_html = []
     try:
@@ -65,12 +65,11 @@ def generate_form_fields_layer(page, page_width, page_height):
                     for span in line["spans"]:
                         text = span["text"].strip()
                         
-                        # Match: [input:text:Placeholder Here]
                         if text.startswith("[input:") and text.endswith("]"):
                             bbox = span["bbox"]
                             parts = text[7:-1].split(":")
                             if len(parts) >= 2:
-                                field_type = parts[0]  # text, email, tel, etc.
+                                field_type = parts[0]  # text, email, textarea, etc.
                                 placeholder = parts[1]
                                 field_name = placeholder.lower().replace(" ", "_")
                                 
@@ -92,7 +91,6 @@ def generate_form_fields_layer(page, page_width, page_height):
                                         "/>
                                     """)
                         
-                        # Match: [submit:Button Text]
                         elif text.startswith("[submit:") and text.endswith("]"):
                             bbox = span["bbox"]
                             btn_text = text[8:-1]
@@ -121,7 +119,6 @@ def generate_selectable_text_layer(page, page_width, page_height):
                 for line in block["lines"]:
                     for span in line["spans"]:
                         text = span["text"]
-                        # Skip form placeholder markup
                         if text.strip().startswith("[input:") or text.strip().startswith("[submit:"):
                             continue
                             
@@ -143,7 +140,7 @@ def generate_selectable_text_layer(page, page_width, page_height):
         pass
     return "\n".join(spans_html)
 
-# 5. Extract Utility links (Raw URLs, Email links, Phones)
+# 5. Extract Utility links (Raw URLs, Emails, Phones)
 def extract_utilities(page):
     detected = []
     text_content = page.get_text()
@@ -208,7 +205,7 @@ def detect_smart_button_intents(page, section_pages, is_multipage):
     return detected
 
 # 7. Core Single/Multi-page compiler
-def compile_page_elements(doc, page_num, section_pages, zoom_factor, is_multipage):
+def compile_page_elements(doc, page_num, section_pages, zoom_factor, is_multipage, transition_effect=None):
     page = doc[page_num - 1]
     page_width = page.rect.width
     page_height = page.rect.height
@@ -226,9 +223,10 @@ def compile_page_elements(doc, page_num, section_pages, zoom_factor, is_multipag
             href, target = link["uri"], 'target="_blank"'
         elif "page" in link:
             target_page_num = link["page"] + 1
-            href = f"#{get_page_filename(target_page_num, section_pages)}" if is_multipage else f"#page-{target_page_num}"
             if is_multipage:
                 href = get_page_filename(target_page_num, section_pages)
+            else:
+                href = f"#page-{target_page_num}"
         if href:
             existing_rects.append(link["from"])
             active_links.append({"rect": link["from"], "href": href, "target": target})
@@ -260,7 +258,7 @@ def compile_page_elements(doc, page_num, section_pages, zoom_factor, is_multipag
     pix = page.get_pixmap(matrix=mat)
     png_bytes = pix.tobytes("png")
     
-    # PIL Conversion to compressed WebP
+    # PIL Conversion to WebP
     img = Image.open(io.BytesIO(png_bytes))
     webp_io = io.BytesIO()
     img.save(webp_io, format="WEBP", quality=85)
@@ -273,8 +271,21 @@ def compile_page_elements(doc, page_num, section_pages, zoom_factor, is_multipag
     
     lazy_attr = 'loading="lazy"' if page_num > 1 else ''
     
+    # Set transition properties based on layout mode
+    transition_attr = f'data-transition="{transition_effect}"' if (transition_effect and not is_multipage) else ''
+    animation_style = ""
+    if is_multipage and transition_effect:
+        if transition_effect == "fade":
+            animation_style = "animation: fadeIn 0.7s ease-out forwards;"
+        elif transition_effect == "slide-up":
+            animation_style = "animation: slideUpIn 0.7s cubic-bezier(0.25, 1, 0.5, 1) forwards;"
+        elif transition_effect == "zoom-in":
+            animation_style = "animation: zoomIn 0.7s cubic-bezier(0.25, 1, 0.5, 1) forwards;"
+        elif transition_effect == "reveal":
+            animation_style = "animation: revealIn 0.7s cubic-bezier(0.25, 1, 0.5, 1) forwards;"
+
     return f"""
-    <div id="page-{page_num}" class="page-container" style="position: relative; width: 100%; max-width: {page_width}px; margin: 0 auto; background: #ffffff;">
+    <div id="page-{page_num}" class="page-container" {transition_attr} style="position: relative; width: 100%; max-width: {page_width}px; margin: 0 auto; background: #ffffff; {animation_style}">
         <div style="padding-top: {aspect_ratio}%;"></div>
         <img src="data:image/webp;base64,{img_base64}" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; display: block;" alt="Page {page_num}" {lazy_attr} />
         <div class="interactive-overlay" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%;">
@@ -287,113 +298,79 @@ def compile_page_elements(doc, page_num, section_pages, zoom_factor, is_multipag
 
 def get_base_styles():
     return """
-        html { 
-            scroll-behavior: smooth; 
-        }
-        body { 
-            margin: 0; 
-            padding: 0; 
-            background-color: #ffffff; 
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; 
-            overflow-x: hidden; 
-        }
-        .page-container { 
-            border-radius: 0; 
-            box-shadow: none; 
-        }
+        html { scroll-behavior: smooth; }
+        body { margin: 0; padding: 0; background-color: #ffffff; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; overflow-x: hidden; }
+        .page-container { border-radius: 0; box-shadow: none; }
         
-        /* 1. UPGRADED SMART BUTTON HOVER ACTIONS */
+        /* 1. HOVER EFFECTS FOR BUTTONS */
         .pdf-link { 
             cursor: pointer; 
             text-decoration: none; 
-            border-radius: 6px; /* Smooths the edges of the click region */
-            
-            /* Clean cubic-bezier transitions for fluid physical motion */
+            border-radius: 6px;
             transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1), 
                         background-color 0.25s cubic-bezier(0.4, 0, 0.2, 1), 
                         box-shadow 0.25s cubic-bezier(0.4, 0, 0.2, 1),
                         backdrop-filter 0.25s cubic-bezier(0.4, 0, 0.2, 1);
             transform: translateY(0) scale(1);
         }
-        
         .pdf-link:hover { 
-            /* Subtle glass overlay to catch light */
             background-color: rgba(255, 255, 255, 0.12); 
-            
-            /* Physical 3D Lift & Scale Shift */
             transform: translateY(-2px) scale(1.02); 
-            
-            /* Soft focus shadow */
             box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1);
-            
-            /* MAGIC: This brightens and pops the visual colors of your Canva button beneath the link! */
             backdrop-filter: brightness(1.15) contrast(1.05) saturate(1.1); 
             -webkit-backdrop-filter: brightness(1.15) contrast(1.05) saturate(1.1);
         }
-        
         .pdf-link:active {
-            /* Restores layout on press */
             transform: translateY(0) scale(1);
             box-shadow: none;
         }
-
-        .selectable-text::selection { 
-            background-color: rgba(59, 130, 246, 0.25); 
-            color: transparent; 
-        }
-        .selectable-text::-webkit-selection { 
-            background-color: rgba(59, 130, 246, 0.25); 
-            color: transparent; 
-        }
+        .selectable-text::selection { background-color: rgba(59, 130, 246, 0.25); color: transparent; }
+        .selectable-text::-webkit-selection { background-color: rgba(59, 130, 246, 0.25); color: transparent; }
         
-        /* 2. UPGRADED FORM COMPONENTS */
+        /* 2. FORM COMPONENTS */
         .form-input {
-            background: rgba(255, 255, 255, 0.85); 
-            border: 1px solid #cbd5e1; 
-            border-radius: 4px;
-            padding: 4px 12px; 
-            font-family: inherit; 
-            font-size: 14px; 
-            outline: none; 
-            transition: all 0.2s ease-in-out;
+            background: rgba(255, 255, 255, 0.85); border: 1px solid #cbd5e1; border-radius: 4px;
+            padding: 4px 12px; font-family: inherit; font-size: 14px; outline: none; transition: all 0.2s ease-in-out;
         }
-        .form-input:focus {
-            border-color: #3b82f6; 
-            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15); 
-            background: #ffffff;
-        }
-        .textarea-field { 
-            resize: none; 
-        }
-        
-        /* 3. UPGRADED SUBMIT BUTTON ACTION */
+        .form-input:focus { border-color: #3b82f6; box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15); background: #ffffff; }
+        .textarea-field { resize: none; }
         .form-submit-btn {
-            background: #2563eb; 
-            color: white; 
-            border: none; 
-            border-radius: 6px;
-            font-weight: 600; 
-            font-size: 14px; 
-            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
-            transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-            cursor: pointer;
+            background: #2563eb; color: white; border: none; border-radius: 6px;
+            font-weight: 600; font-size: 14px; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+            transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1); cursor: pointer;
         }
-        .form-submit-btn:hover { 
-            background-color: #1d4ed8; 
-            transform: translateY(-2px);
-            box-shadow: 0 10px 15px -3px rgba(37, 99, 235, 0.3), 0 4px 6px -2px rgba(37, 99, 235, 0.15);
+        .form-submit-btn:hover { background-color: #1d4ed8; transform: translateY(-2px); box-shadow: 0 10px 15px -3px rgba(37, 99, 235, 0.3), 0 4px 6px -2px rgba(37, 99, 235, 0.15); }
+        .form-submit-btn:active { transform: translateY(0); box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1); }
+
+        /* 3. SCROLL TRANSITIONS CSS MAP */
+        .page-container[data-transition] {
+            transition: all 0.8s cubic-bezier(0.25, 1, 0.5, 1);
+            will-change: transform, opacity, clip-path;
         }
-        .form-submit-btn:active {
-            transform: translateY(0);
-            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
-        }
+        html.js-enabled .page-container[data-transition="fade"] { opacity: 0; }
+        html.js-enabled .page-container[data-transition="fade"].is-visible { opacity: 1; }
+        
+        html.js-enabled .page-container[data-transition="slide-up"] { opacity: 0; transform: translateY(60px); }
+        html.js-enabled .page-container[data-transition="slide-up"].is-visible { opacity: 1; transform: translateY(0); }
+        
+        html.js-enabled .page-container[data-transition="zoom-in"] { opacity: 0; transform: scale(0.93); }
+        html.js-enabled .page-container[data-transition="zoom-in"].is-visible { opacity: 1; transform: scale(1); }
+        
+        html.js-enabled .page-container[data-transition="reveal"] { clip-path: inset(100% 0 0 0); }
+        html.js-enabled .page-container[data-transition="reveal"].is-visible { clip-path: inset(0 0 0 0); }
+
+        /* Multi-page load animators */
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+        @keyframes slideUpIn { from { opacity: 0; transform: translateY(50px); } to { opacity: 1; transform: translateY(0); } }
+        @keyframes zoomIn { from { opacity: 0; transform: scale(0.93); } to { opacity: 1; transform: scale(1); } }
+        @keyframes revealIn { from { clip-path: inset(100% 0 0 0); } to { clip-path: inset(0 0 0 0); } }
     """
 
 @app.route('/', methods=['GET', 'POST'])
 def index():
     if request.method == 'POST':
         if 'pdf_file' not in request.files:
-            flash('No file part')
+            flash('No file was uploaded.')
             return redirect(request.url)
         file = request.files['pdf_file']
         if file.filename == '':
@@ -409,11 +386,24 @@ def index():
                 ga_id = request.form.get('ga_id', '').strip()
                 form_action = request.form.get('form_action', '').strip()
                 
+                # Fetch User's Transition Rules arrays
+                from_pages = request.form.getlist('from_page[]')
+                to_pages = request.form.getlist('to_page[]')
+                effects = request.form.getlist('effect[]')
+                
+                # Map target_page -> transition_effect
+                transitions_map = {}
+                for fp, tp, eff in zip(from_pages, to_pages, effects):
+                    try:
+                        transitions_map[int(tp)] = eff
+                    except ValueError:
+                        continue
+                
                 pdf_bytes = file.read()
                 doc = fitz.open(stream=pdf_bytes, filetype="pdf")
                 section_pages = index_document_sections(doc)
                 
-                # Google Analytics tag script injection
+                # Analytics tracking
                 ga_script = f"""
                 <script async src="https://www.googletagmanager.com/gtag/js?id={ga_id}"></script>
                 <script>
@@ -423,15 +413,16 @@ def index():
                 </script>
                 """ if ga_id else ""
                 
-                # Wrap pages inside a form if target action is specified
-                form_open = f'<form action="{form_action}" method="POST">' if form_action else ''
+                # Global Form structures
+                form_open = f'<form action="{form_action}" method="POST" style="margin:0;padding:0;">' if form_action else ''
                 form_close = '</form>' if form_action else ''
 
                 # MODE A: Single Page Compiled Output
                 if layout_mode == 'single':
                     pages_body_html = []
                     for p in range(1, len(doc) + 1):
-                        pages_body_html.append(compile_page_elements(doc, p, section_pages, zoom, is_multipage=False))
+                        eff = transitions_map.get(p)
+                        pages_body_html.append(compile_page_elements(doc, p, section_pages, zoom, is_multipage=False, transition_effect=eff))
                         
                     html_content = f"""<!DOCTYPE html>
 <html lang="en">
@@ -449,6 +440,29 @@ def index():
         {"".join(pages_body_html)}
     </main>
     {form_close}
+    
+    <!-- IntersectionObserver handler for single scroll animations -->
+    <script>
+    document.documentElement.classList.add('js-enabled');
+    document.addEventListener("DOMContentLoaded", () => {{
+        const observerOptions = {{
+            root: null,
+            rootMargin: "0px",
+            threshold: 0.12
+        }};
+        const observer = new IntersectionObserver((entries, observer) => {{
+            entries.forEach(entry => {{
+                if (entry.isIntersecting) {{
+                    entry.target.classList.add("is-visible");
+                    observer.unobserve(entry.target);
+                }}
+            }});
+        }}, observerOptions);
+        document.querySelectorAll(".page-container[data-transition]").forEach(page => {{
+            observer.observe(page);
+        }});
+    }});
+    </script>
 </body>
 </html>"""
                     
@@ -464,7 +478,8 @@ def index():
                     zip_buffer = io.BytesIO()
                     with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zip_file:
                         for p in range(1, len(doc) + 1):
-                            page_body = compile_page_elements(doc, p, section_pages, zoom, is_multipage=True)
+                            eff = transitions_map.get(p)
+                            page_body = compile_page_elements(doc, p, section_pages, zoom, is_multipage=True, transition_effect=eff)
                             page_filename = get_page_filename(p, section_pages)
                             
                             page_html = f"""<!DOCTYPE html>
