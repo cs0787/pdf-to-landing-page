@@ -287,28 +287,106 @@ def compile_page_elements(doc, page_num, section_pages, zoom_factor, is_multipag
 
 def get_base_styles():
     return """
-        html { scroll-behavior: smooth; }
-        body { margin: 0; padding: 0; background-color: #ffffff; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; overflow-x: hidden; }
-        .page-container { border-radius: 0; box-shadow: none; }
-        .pdf-link { cursor: pointer; text-decoration: none; }
-        .pdf-link:hover { background-color: rgba(59, 130, 246, 0.08); outline: 1.5px dashed rgba(59, 130, 246, 0.5); }
-        .selectable-text::selection { background-color: rgba(59, 130, 246, 0.25); color: transparent; }
-        .selectable-text::-webkit-selection { background-color: rgba(59, 130, 246, 0.25); color: transparent; }
+        html { 
+            scroll-behavior: smooth; 
+        }
+        body { 
+            margin: 0; 
+            padding: 0; 
+            background-color: #ffffff; 
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; 
+            overflow-x: hidden; 
+        }
+        .page-container { 
+            border-radius: 0; 
+            box-shadow: none; 
+        }
         
-        /* Modern form components */
+        /* 1. UPGRADED SMART BUTTON HOVER ACTIONS */
+        .pdf-link { 
+            cursor: pointer; 
+            text-decoration: none; 
+            border-radius: 6px; /* Smooths the edges of the click region */
+            
+            /* Clean cubic-bezier transitions for fluid physical motion */
+            transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1), 
+                        background-color 0.25s cubic-bezier(0.4, 0, 0.2, 1), 
+                        box-shadow 0.25s cubic-bezier(0.4, 0, 0.2, 1),
+                        backdrop-filter 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+            transform: translateY(0) scale(1);
+        }
+        
+        .pdf-link:hover { 
+            /* Subtle glass overlay to catch light */
+            background-color: rgba(255, 255, 255, 0.12); 
+            
+            /* Physical 3D Lift & Scale Shift */
+            transform: translateY(-2px) scale(1.02); 
+            
+            /* Soft focus shadow */
+            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1);
+            
+            /* MAGIC: This brightens and pops the visual colors of your Canva button beneath the link! */
+            backdrop-filter: brightness(1.15) contrast(1.05) saturate(1.1); 
+            -webkit-backdrop-filter: brightness(1.15) contrast(1.05) saturate(1.1);
+        }
+        
+        .pdf-link:active {
+            /* Restores layout on press */
+            transform: translateY(0) scale(1);
+            box-shadow: none;
+        }
+
+        .selectable-text::selection { 
+            background-color: rgba(59, 130, 246, 0.25); 
+            color: transparent; 
+        }
+        .selectable-text::-webkit-selection { 
+            background-color: rgba(59, 130, 246, 0.25); 
+            color: transparent; 
+        }
+        
+        /* 2. UPGRADED FORM COMPONENTS */
         .form-input {
-            background: rgba(255, 255, 255, 0.85); border: 1px solid #cbd5e1; border-radius: 4px;
-            padding: 4px 12px; font-family: inherit; font-size: 14px; outline: none; transition: all 0.2s;
+            background: rgba(255, 255, 255, 0.85); 
+            border: 1px solid #cbd5e1; 
+            border-radius: 4px;
+            padding: 4px 12px; 
+            font-family: inherit; 
+            font-size: 14px; 
+            outline: none; 
+            transition: all 0.2s ease-in-out;
         }
         .form-input:focus {
-            border-color: #3b82f6; box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15); background: #ffffff;
+            border-color: #3b82f6; 
+            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15); 
+            background: #ffffff;
         }
-        .textarea-field { resize: none; }
+        .textarea-field { 
+            resize: none; 
+        }
+        
+        /* 3. UPGRADED SUBMIT BUTTON ACTION */
         .form-submit-btn {
-            background: #2563eb; color: white; border: none; border-radius: 4px;
-            font-weight: 600; font-size: 14px; transition: background-color 0.2s; cursor: pointer;
+            background: #2563eb; 
+            color: white; 
+            border: none; 
+            border-radius: 6px;
+            font-weight: 600; 
+            font-size: 14px; 
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+            transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+            cursor: pointer;
         }
-        .form-submit-btn:hover { background-color: #1d4ed8; }
+        .form-submit-btn:hover { 
+            background-color: #1d4ed8; 
+            transform: translateY(-2px);
+            box-shadow: 0 10px 15px -3px rgba(37, 99, 235, 0.3), 0 4px 6px -2px rgba(37, 99, 235, 0.15);
+        }
+        .form-submit-btn:active {
+            transform: translateY(0);
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+        }
     """
 
 @app.route('/', methods=['GET', 'POST'])
