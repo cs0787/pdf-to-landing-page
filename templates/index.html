@@ -3,250 +3,571 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Enterprise PDF to Static Website Builder</title>
+    <title>Visual PDF-to-Website Editor Studio</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        .editor-text-span:hover {
+            border-color: #3b82f6 !important;
+            background-color: rgba(59, 130, 246, 0.12) !important;
+        }
+        .editor-text-span.has-link {
+            border-color: #10b981 !important;
+            background-color: rgba(16, 185, 129, 0.08) !important;
+        }
+    </style>
 </head>
-<body class="bg-slate-50 min-h-screen flex flex-col justify-between font-sans">
-    <header class="bg-white shadow-sm border-b">
-        <div class="max-w-5xl mx-auto px-6 py-4 flex justify-between items-center">
+<body class="bg-slate-50 min-h-screen flex flex-col font-sans select-none">
+
+    <!-- HEADER / TOOLBAR -->
+    <header class="bg-white shadow-sm border-b sticky top-0 z-40">
+        <div class="max-w-7xl mx-auto px-6 py-4 flex justify-between items-center">
             <div class="flex items-center gap-3">
-                <span class="text-2xl font-black text-indigo-600 tracking-tight">PDF2Web Studio</span>
-                <span class="text-xs bg-indigo-50 text-indigo-700 px-3 py-1 rounded-full font-semibold">v4.0 Cinematic</span>
+                <span class="text-xl font-black text-indigo-600 tracking-tight">PDF2Web Visual Studio</span>
+                <span class="text-xs bg-emerald-50 text-emerald-700 px-3 py-1 rounded-full font-bold">Client Editor Mode</span>
             </div>
-            <span class="text-xs text-slate-400">Zero-Code Deployment</span>
+            <div id="editor-actions" class="hidden flex items-center gap-4">
+                <button type="button" onclick="triggerBuild()" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold px-5 py-2 rounded-lg text-sm transition shadow shadow-indigo-200">
+                    Export Static Website
+                </button>
+            </div>
         </div>
     </header>
 
-    <main class="max-w-5xl mx-auto px-6 py-10 w-full flex-grow">
-        <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
-            
-            <!-- Left Column: Settings & Configs -->
-            <form action="/" method="POST" enctype="multipart/form-data" class="lg:col-span-2 bg-white rounded-2xl shadow-md border border-slate-100 p-8 space-y-6">
-                <div>
-                    <h1 class="text-2xl font-bold text-slate-800">Visual Site Builder Configuration</h1>
-                    <p class="text-sm text-slate-500 mt-1">Upload your Canva or Figma design layouts to package them with high-fidelity transitions.</p>
+    <!-- MAIN EDITING AREA -->
+    <main class="flex-grow flex flex-col items-center justify-center relative">
+        
+        <!-- PHASE 1: UPLOADER PANEL -->
+        <section id="uploader-panel" class="max-w-xl w-full mx-auto px-6 py-16">
+            <div class="bg-white rounded-2xl shadow-xl p-8 border border-slate-100 space-y-6">
+                <div class="text-center">
+                    <h1 class="text-2xl font-bold text-slate-800">Visual PDF to Website Studio</h1>
+                    <p class="text-sm text-slate-500 mt-1">Upload a PDF design layout from Canva or Figma. We'll load the visual assets and let you map links, transitions, and buttons directly on-screen.</p>
                 </div>
 
-                {% with messages = get_flashed_messages() %}
-                  {% if messages %}
-                    <div class="p-4 bg-rose-50 text-rose-700 rounded-lg border border-rose-100 text-sm">
-                      {% for message in messages %} <p>{{ message }}</p> {% endfor %}
-                    </div>
-                  {% endif %}
-                {% endwith %}
-
-                <!-- File Drop Zone -->
                 <div class="border-2 border-dashed border-slate-200 rounded-xl p-8 text-center hover:border-indigo-500 hover:bg-slate-50/50 transition cursor-pointer relative" id="drop-zone">
-                    <input type="file" name="pdf_file" id="file-input" class="absolute inset-0 opacity-0 cursor-pointer" accept=".pdf" required>
+                    <input type="file" id="pdf-file-input" class="absolute inset-0 opacity-0 cursor-pointer" accept=".pdf" required>
                     <div class="space-y-3" id="drop-prompt">
                         <svg class="mx-auto h-12 w-12 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"></path></svg>
-                        <div class="text-slate-600 font-semibold">Drag & drop your PDF layout here</div>
-                        <p class="text-xs text-slate-400">PDF designs up to 50MB</p>
-                    </div>
-                    <div class="hidden text-indigo-600 font-semibold space-y-2" id="file-selected">
-                        <svg class="mx-auto h-12 w-12 text-emerald-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
-                        <span id="file-name" class="block text-slate-700 font-bold truncate">Selected File</span>
+                        <div class="text-slate-600 font-semibold">Select or drag & drop design PDF</div>
                     </div>
                 </div>
 
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                        <label class="block text-sm font-semibold text-slate-700">Site Directory Structure</label>
-                        <select name="layout_mode" class="mt-1 block w-full rounded-lg border-slate-200 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 bg-white py-2.5 px-3 border text-sm">
-                            <option value="single" selected>Single-Page Smooth Scrolling (.html)</option>
-                            <option value="multipage">Multi-Page Independent Files (.zip directory)</option>
-                        </select>
-                    </div>
-                    <div>
-                        <label class="block text-sm font-semibold text-slate-700">Image Asset Quality (WebP)</label>
-                        <select name="zoom" class="mt-1 block w-full rounded-lg border-slate-200 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 bg-white py-2.5 px-3 border text-sm">
-                            <option value="1.5">Standard Quality (Loads fastest / Compact file size)</option>
-                            <option value="2.0" selected>High-Definition 2x (Retina-sharp / Recommended)</option>
-                            <option value="3.0">Ultra-High 3x (Heavy asset size / Crystal-clear graphics)</option>
-                        </select>
-                    </div>
+                <div id="upload-status" class="hidden text-center space-y-2">
+                    <div class="inline-block animate-spin rounded-full h-8 w-8 border-4 border-indigo-600 border-t-transparent"></div>
+                    <p class="text-sm text-slate-600 font-semibold" id="status-text">Scanning layout vectors...</p>
                 </div>
+            </div>
+        </section>
 
-                <!-- DYNAMIC PAGE TRANSITIONS BUILDER -->
-                <div class="border-t border-slate-100 pt-6 space-y-4">
-                    <div class="flex justify-between items-center">
-                        <div class="space-y-0.5">
-                            <h3 class="text-sm font-semibold text-slate-800 tracking-wide uppercase">Page Transition Rules</h3>
-                            <p class="text-xs text-slate-400">Configure visual animations when navigating between pages.</p>
-                        </div>
-                        <button type="button" id="add-transition-btn" class="text-xs bg-indigo-50 text-indigo-700 hover:bg-indigo-100 px-3 py-2 rounded-lg font-bold transition">
-                            + Add Transition Rule
-                        </button>
-                    </div>
+        <!-- PHASE 2: INTERACTIVE WYSIWYG WORKSPACE (DYNAMIC) -->
+        <section id="workspace-panel" class="hidden w-full max-w-7xl mx-auto px-6 py-8 grid grid-cols-1 lg:grid-cols-3 gap-8">
+            
+            <!-- Canvas Preview Container (Left column) -->
+            <div class="lg:col-span-2 space-y-2" id="canvas-column">
+                <h3 class="text-xs font-bold text-slate-400 uppercase tracking-widest mb-4">Live Design Canvas</h3>
+                <div id="editor-workspace" class="space-y-0">
+                    <!-- Javascript generates preview containers here -->
+                </div>
+            </div>
+
+            <!-- Configuration & Metadata (Right Column) -->
+            <div class="space-y-6">
+                <h3 class="text-xs font-bold text-slate-400 uppercase tracking-widest">Workspace Settings</h3>
+                
+                <div class="bg-white rounded-2xl shadow-md border border-slate-100 p-6 space-y-4">
+                    <h4 class="text-sm font-bold text-slate-800 border-b pb-2">Global Metadata</h4>
                     
-                    <div id="transitions-container" class="space-y-2">
-                        <!-- Javascript generates rows here dynamically -->
-                    </div>
-                </div>
-
-                <!-- Custom Meta & Integrations Section -->
-                <div class="border-t border-slate-100 pt-6 space-y-4">
-                    <h3 class="text-sm font-semibold text-slate-800 tracking-wide uppercase">SEO, Marketing, & Form Configuration</h3>
-                    
-                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div class="space-y-3">
                         <div>
                             <label class="block text-xs font-semibold text-slate-500">Website Meta Title</label>
-                            <input type="text" name="meta_title" value="My Visual Static Website" class="mt-1 block w-full rounded-lg border-slate-200 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 bg-white py-2 px-3 border text-sm">
+                            <input type="text" id="meta-title" value="My Custom Website" class="mt-1 block w-full rounded-lg border-slate-200 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 bg-white py-1.5 px-3 border text-xs">
                         </div>
                         <div>
-                            <label class="block text-xs font-semibold text-slate-500">Google Analytics G-ID (Optional)</label>
-                            <input type="text" name="ga_id" placeholder="G-XXXXXXXXXX" class="mt-1 block w-full rounded-lg border-slate-200 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 bg-white py-2 px-3 border text-sm">
-                        </div>
-                    </div>
-
-                    <div>
-                        <label class="block text-xs font-semibold text-slate-500">Website Meta Description (SEO)</label>
-                        <textarea name="meta_desc" rows="2" placeholder="Describe the purpose of this website for search engine visibility..." class="mt-1 block w-full rounded-lg border-slate-200 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 bg-white py-2 px-3 border text-sm resize-none"></textarea>
-                    </div>
-
-                    <div>
-                        <label class="block text-xs font-semibold text-slate-500">Forms Integration Endpoint URL (Optional)</label>
-                        <input type="url" name="form_action" placeholder="e.g. https://formspree.io/f/your_endpoint_id" class="mt-1 block w-full rounded-lg border-slate-200 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 bg-white py-2 px-3 border text-sm">
-                        <p class="text-[11px] text-slate-400 mt-1">If using Formspree or Web3Forms, enter your submission endpoint here.</p>
-                    </div>
-                </div>
-
-                <button type="submit" class="w-full flex justify-center py-3.5 px-4 border border-transparent rounded-lg shadow-md text-sm font-bold text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition duration-150">
-                    Compile & Download Bundle
-                </button>
-            </form>
-
-            <!-- Right Column: Guidelines -->
-            <div class="space-y-6">
-                <!-- Transition overview card -->
-                <div class="bg-white rounded-2xl shadow-md border border-slate-100 p-6 space-y-4">
-                    <h3 class="text-sm font-bold text-indigo-900 uppercase tracking-wider">Cinematic Transitions Info</h3>
-                    <div class="text-[11px] space-y-3 leading-relaxed text-slate-600">
-                        <div>
-                            <strong class="text-slate-800 block">1. Sticky Stacking Cards</strong>
-                            <span class="text-slate-500">Sections lock in place while the next section slides directly over them. Creates a high-end 3D depth effect [2].</span>
+                            <label class="block text-xs font-semibold text-slate-500">Website Description (SEO)</label>
+                            <textarea id="meta-desc" rows="2" class="mt-1 block w-full rounded-lg border-slate-200 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 bg-white py-1.5 px-3 border text-xs resize-none"></textarea>
                         </div>
                         <div>
-                            <strong class="text-slate-800 block">2. Clip-Path Reveal</strong>
-                            <span class="text-slate-500">The next section expands from a small circle, rectangle, or custom shape into a full-screen view. Offers a cinematic feel.</span>
+                            <label class="block text-xs font-semibold text-slate-500">Export Structure Mode</label>
+                            <select id="layout-mode" class="mt-1 block w-full rounded-lg border-slate-200 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 bg-white py-1.5 px-3 border text-xs">
+                                <option value="single" selected>Single-Page Smooth Scrolling (.html)</option>
+                                <option value="multipage">Multi-Page Independent files (.zip directory)</option>
+                            </select>
                         </div>
                         <div>
-                            <strong class="text-slate-800 block">3. Vertical Split-Screen</strong>
-                            <span class="text-slate-500">The screen splits into two vertical columns that scroll in opposite directions simultaneously. Breaks traditional layout monotony.</span>
+                            <label class="block text-xs font-semibold text-slate-500">Google Analytics ID</label>
+                            <input type="text" id="ga-id" placeholder="G-XXXXXXXXXX" class="mt-1 block w-full rounded-lg border-slate-200 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 bg-white py-1.5 px-3 border text-xs">
                         </div>
                         <div>
-                            <strong class="text-slate-800 block">4. Horizontal Scroll Snap</strong>
-                            <span class="text-slate-500">Vertical scrolling temporarily locks, and the website shifts horizontally across full-screen panels before resuming vertical flow.</span>
+                            <label class="block text-xs font-semibold text-slate-500">Forms Submission URL</label>
+                            <input type="url" id="form-action" placeholder="https://formspree.io/f/..." class="mt-1 block w-full rounded-lg border-slate-200 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 bg-white py-1.5 px-3 border text-xs">
                         </div>
                     </div>
                 </div>
 
-                <!-- Tag Guidelines card -->
                 <div class="bg-white rounded-2xl shadow-md border border-slate-100 p-6 space-y-4">
-                    <div>
-                        <h3 class="text-sm font-bold text-slate-800 uppercase tracking-wider">Interactive Placeholders</h3>
-                        <p class="text-xs text-slate-500 mt-1">Type these exact tags directly inside text layers in Canva or Figma to generate active dynamic form components.</p>
-                    </div>
-
-                    <div class="space-y-3">
-                        <div class="p-3 bg-indigo-50/50 rounded-xl border border-indigo-100/50 space-y-1">
-                            <span class="text-[11px] font-extrabold text-indigo-700 uppercase">Text Inputs</span>
-                            <code class="block text-[10px] bg-slate-900 text-indigo-300 p-1.5 rounded font-mono break-all">[input:text:Your Name]</code>
-                        </div>
-
-                        <div class="p-3 bg-indigo-50/50 rounded-xl border border-indigo-100/50 space-y-1">
-                            <span class="text-[11px] font-extrabold text-indigo-700 uppercase">Email Fields</span>
-                            <code class="block text-[10px] bg-slate-900 text-indigo-300 p-1.5 rounded font-mono break-all">[input:email:Your Email]</code>
-                        </div>
-
-                        <div class="p-3 bg-indigo-50/50 rounded-xl border border-indigo-100/50 space-y-1">
-                            <span class="text-[11px] font-extrabold text-indigo-700 uppercase">Submit Button</span>
-                            <code class="block text-[10px] bg-slate-900 text-indigo-300 p-1.5 rounded font-mono break-all">[submit:Send Message]</code>
-                        </div>
+                    <h4 class="text-sm font-bold text-slate-800 border-b pb-2">Active Hotspots</h4>
+                    <div id="hotspots-list" class="text-xs text-slate-400 space-y-2 max-h-48 overflow-y-auto">
+                        No custom links or buttons mapped yet. Click on any text on the left to add one!
                     </div>
                 </div>
             </div>
-            
-        </div>
+        </section>
     </main>
+
+    <!-- FLOATING LINK CONFIGURATOR TOOLTIP -->
+    <div id="link-configurator" class="hidden absolute bg-white border border-slate-200 shadow-2xl rounded-xl p-4 z-50 w-72 space-y-3">
+        <h4 class="text-xs font-black text-slate-700 uppercase tracking-wider">Configure Link / Button</h4>
+        <div>
+            <label class="block text-[9px] font-bold text-slate-400 uppercase">Text Selected</label>
+            <div id="config-selected-text" class="text-xs text-slate-600 font-semibold italic truncate bg-slate-50 p-1.5 rounded border border-slate-100 mt-1"></div>
+        </div>
+        <div>
+            <label class="block text-[9px] font-bold text-slate-400 uppercase">Destination Type</label>
+            <select id="config-link-type" onchange="toggleLinkTargetInputs()" class="w-full text-xs rounded border-slate-200 py-1.5 px-2 mt-1 bg-white border">
+                <option value="url">External URL (https://...)</option>
+                <option value="scroll">Scroll to Page Section</option>
+            </select>
+        </div>
+        <div>
+            <label class="block text-[9px] font-bold text-slate-400 uppercase" id="config-link-target-label">Target URL</label>
+            <input type="text" id="config-link-target-url" placeholder="https://example.com" class="w-full text-xs rounded border-slate-200 py-1.5 px-2 mt-1 border">
+            <select id="config-link-target-scroll" class="hidden w-full text-xs rounded border-slate-200 py-1.5 px-2 mt-1 bg-white border"></select>
+        </div>
+        <div>
+            <label class="block text-[9px] font-bold text-slate-400 uppercase">Hover Effect Style</label>
+            <select id="config-hover-effect" class="w-full text-xs rounded border-slate-200 py-1.5 px-2 mt-1 bg-white border">
+                <option value="glow">Glassmorphic Glow (Lights up Underlying Image)</option>
+                <option value="lift">3D Float Lift (Slides Up + Soft Shadow)</option>
+                <option value="pulse">Soft Pulse (Gently scales up)</option>
+                <option value="none">No Effect (Standard clean hotspot)</option>
+            </select>
+        </div>
+        <div class="flex justify-end gap-2 text-xs pt-1 border-t border-slate-50">
+            <button type="button" id="config-delete-btn" onclick="deleteActiveLink()" class="hidden text-rose-600 hover:text-rose-800 font-semibold px-2">Remove</button>
+            <button type="button" onclick="closeLinkModal()" class="text-slate-500 hover:text-slate-700 font-semibold px-2">Cancel</button>
+            <button type="button" onclick="saveActiveLink()" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold px-3 py-1 rounded">Save</button>
+        </div>
+    </div>
+
+    <!-- FLOATING TRANSITION SELECTOR TOOLTIP -->
+    <div id="transition-configurator" class="hidden absolute bg-white border border-slate-200 shadow-2xl rounded-xl p-4 z-50 w-72 space-y-3">
+        <h4 class="text-xs font-black text-slate-700 uppercase tracking-wider">Page Scroll Transition</h4>
+        <p class="text-[10px] text-slate-400">Choose the transition effect when sliding into this section.</p>
+        <div>
+            <select id="transition-effect-select" class="w-full text-xs rounded border border-slate-200 py-1.5 px-2 bg-white">
+                <option value="">No Transition (Standard scroll)</option>
+                <option value="sticky-cards">1. Sticky Stacking Cards (Section stack over scroll)</option>
+                <option value="clip-reveal">2. Clip-Path Reveal (Cinematic circle zoom expansion)</option>
+                <option value="split-screen">3. Vertical Split-Screen (Opposing columns slide-in)</option>
+                <option value="horizontal-snap">4. Horizontal Scroll Snap (Panel slide-in)</option>
+                <option value="fade">Fade In (Graceful dissolve)</option>
+                <option value="slide-up">Slide Up & Fade (Parallax card float)</option>
+                <option value="zoom-in">Zoom In (Fluid depth focus)</option>
+                <option value="reveal">Wipe Reveal (Bottom-to-top mask wipe)</option>
+            </select>
+        </div>
+        <div class="flex justify-end gap-2 text-xs pt-1 border-t border-slate-50">
+            <button type="button" onclick="closeTransitionModal()" class="text-slate-500 hover:text-slate-700 font-semibold px-2">Cancel</button>
+            <button type="button" onclick="saveTransition()" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold px-3 py-1 rounded">Apply</button>
+        </div>
+    </div>
 
     <footer class="bg-slate-100 border-t py-6 text-center text-xs text-slate-400">
         <p>© 2026 PDF2Web Studio. Built for lightning-fast serverless conversions.</p>
     </footer>
 
+    <!-- INTERACTIVE WORKSPACE ENGINE -->
     <script>
+        let pdfData = null;  // Holds page payloads in memory
+        let customLinks = []; // Holds user custom hotspot links
+        let transitions = {}; // Holds transitions mapped "page": "effect"
+        let activeSpan = null; // Active span being configured
+        let activeTransitionTarget = null; // Target page receiving transition config
+
+        const fileInput = document.getElementById('pdf-file-input');
+        const uploadStatus = document.getElementById('upload-status');
+        const statusText = document.getElementById('status-text');
         const dropZone = document.getElementById('drop-zone');
-        const fileInput = document.getElementById('file-input');
-        const dropPrompt = document.getElementById('drop-prompt');
-        const fileSelected = document.getElementById('file-selected');
-        const fileName = document.getElementById('file-name');
 
         fileInput.addEventListener('change', (e) => {
             if (fileInput.files.length > 0) {
-                fileName.textContent = fileInput.files[0].name;
-                dropPrompt.classList.add('hidden');
-                fileSelected.classList.remove('hidden');
+                handleUpload(fileInput.files[0]);
             }
         });
 
+        // Drag & drop handlers
         ['dragenter', 'dragover'].forEach(eventName => {
-            dropZone.addEventListener(eventName, () => {
-                dropZone.classList.add('border-indigo-500', 'bg-indigo-50/50');
-            }, false);
+            dropZone.addEventListener(eventName, () => dropZone.classList.add('border-indigo-500', 'bg-indigo-50/50'), false);
         });
         ['dragleave', 'drop'].forEach(eventName => {
-            dropZone.addEventListener(eventName, () => {
-                dropZone.classList.remove('border-indigo-500', 'bg-indigo-50/50');
-            }, false);
+            dropZone.addEventListener(eventName, () => dropZone.classList.remove('border-indigo-500', 'bg-indigo-50/50'), false);
+        });
+        dropZone.addEventListener('drop', (e) => {
+            e.preventDefault();
+            if (e.dataTransfer.files.length > 0) {
+                handleUpload(e.dataTransfer.files[0]);
+            }
         });
 
-        // DYNAMIC PAGE TRANSITION GENERATOR WITH CATEGORY SPLITS
-        const container = document.getElementById('transitions-container');
-        const addBtn = document.getElementById('add-transition-btn');
-
-        function createTransitionRow() {
-            const row = document.createElement('div');
-            row.className = "flex flex-wrap items-center gap-3 bg-slate-50 p-3 rounded-lg border border-slate-200/60 transition-row text-xs";
-            row.innerHTML = `
-                <div class="flex items-center gap-1.5 text-slate-600">
-                    <span>From Page</span>
-                    <input type="number" name="from_page[]" min="1" placeholder="1" required class="w-16 rounded border-slate-200 py-1 px-2 text-center text-sm focus:border-indigo-500 focus:ring-indigo-500">
-                </div>
-                <div class="flex items-center gap-1.5 text-slate-600">
-                    <span>to Page</span>
-                    <input type="number" name="to_page[]" min="2" placeholder="2" required class="w-16 rounded border-slate-200 py-1 px-2 text-center text-sm focus:border-indigo-500 focus:ring-indigo-500">
-                </div>
-                <div class="flex-grow min-w-[150px]">
-                    <select name="effect[]" class="w-full rounded border-slate-200 py-1 px-2 focus:border-indigo-500 focus:ring-indigo-500 bg-white">
-                        <!-- Upgraded Advanced Scroll Transitions (Top) -->
-                        <optgroup label="Advanced Scroll Transitions">
-                            <option value="sticky-cards">1. Sticky Stacking Cards (Section stack over scroll)</option>
-                            <option value="clip-reveal">2. Clip-Path Reveal (Cinematic circle zoom expansion)</option>
-                            <option value="split-screen">3. Vertical Split-Screen (Opposing columns slide-in)</option>
-                            <option value="horizontal-snap">4. Horizontal Scroll Snap (Panel slide-in)</option>
-                        </optgroup>
-                        
-                        <!-- Existing Scroll Transitions (Below) -->
-                        <optgroup label="Standard Transitions">
-                            <option value="fade">Fade In (Graceful dissolve)</option>
-                            <option value="slide-up">Slide Up & Fade (Parallax card float)</option>
-                            <option value="zoom-in">Zoom In (Fluid depth focus)</option>
-                            <option value="reveal">Wipe Reveal (Bottom-to-top mask wipe)</option>
-                        </optgroup>
-                    </select>
-                </div>
-                <button type="button" class="remove-row-btn text-rose-500 hover:text-rose-700 p-1">
-                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
-                </button>
-            `;
+        // Phase 1: Upload and scan PDF
+        function handleUpload(file) {
+            dropZone.classList.add('hidden');
+            uploadStatus.classList.remove('hidden');
+            statusText.textContent = "Uploading PDF document...";
             
-            row.querySelector('.remove-row-btn').addEventListener('click', () => {
-                row.remove();
+            const formData = new FormData();
+            formData.append('pdf_file', file);
+            
+            statusText.textContent = "Extracting layout, selectable text & rendering graphics...";
+            
+            fetch('/process', {
+                method: 'POST',
+                body: formData
+            })
+            .then(res => res.json())
+            .then(data => {
+                if (data.error) {
+                    alert(data.error);
+                    resetUploader();
+                } else {
+                    pdfData = data.pages;
+                    document.getElementById('uploader-panel').classList.add('hidden');
+                    document.getElementById('workspace-panel').classList.remove('hidden');
+                    document.getElementById('editor-actions').classList.remove('hidden');
+                    buildEditor(data.pages);
+                    populatePageSelectScroll();
+                }
+            })
+            .catch(err => {
+                alert("Failed to process document: " + err);
+                resetUploader();
             });
-            container.appendChild(row);
         }
 
-        addBtn.addEventListener('click', createTransitionRow);
+        function resetUploader() {
+            dropZone.classList.remove('hidden');
+            uploadStatus.classList.add('hidden');
+            fileInput.value = '';
+        }
+
+        // Phase 2: Construct the interactive workspace canvas
+        function buildEditor(pages) {
+            const workspace = document.getElementById('editor-workspace');
+            workspace.innerHTML = '';
+            
+            pages.forEach((page, index) => {
+                // Page block container
+                const pageContainer = document.createElement('div');
+                pageContainer.className = 'editor-page-container relative border border-slate-200 bg-white shadow-sm';
+                pageContainer.style.width = '100%';
+                pageContainer.style.maxWidth = `${page.width}px`;
+                pageContainer.style.margin = '0 auto';
+                
+                // Aspect Ratio Spacer
+                const spacer = document.createElement('div');
+                spacer.style.paddingTop = `${page.aspect_ratio}%`;
+                pageContainer.appendChild(spacer);
+                
+                // Base HD Layout webp image
+                const img = document.createElement('img');
+                img.src = page.image;
+                img.className = 'absolute top-0 left-0 w-full h-full block pointer-events-none';
+                pageContainer.appendChild(img);
+                
+                // Text selection bounding box layers [1]
+                const textLayer = document.createElement('div');
+                textLayer.className = 'absolute top-0 left-0 w-full h-full';
+                
+                page.spans.forEach(span => {
+                    const textSpan = document.createElement('div');
+                    textSpan.className = 'editor-text-span absolute border border-transparent transition cursor-pointer text-transparent select-none';
+                    
+                    const left = (span.bbox[0] / page.width) * 100;
+                    const top = (span.bbox[1] / page.height) * 100;
+                    const width = ((span.bbox[2] - span.bbox[0]) / page.width) * 100;
+                    const height = ((span.bbox[3] - span.bbox[1]) / page.height) * 100;
+                    
+                    textSpan.style.left = `${left}%`;
+                    textSpan.style.top = `${top}%`;
+                    textSpan.style.width = `${width}%`;
+                    textSpan.style.height = `${height}%`;
+                    
+                    textSpan.dataset.text = span.text;
+                    textSpan.dataset.pageNum = page.number;
+                    textSpan.dataset.bbox = JSON.stringify(span.bbox);
+                    
+                    textSpan.addEventListener('click', (e) => openLinkModal(textSpan, e));
+                    
+                    textLayer.appendChild(textSpan);
+                });
+                pageContainer.appendChild(textLayer);
+                workspace.appendChild(pageContainer);
+                
+                // Render '+' transition inserter button between pages
+                if (index < pages.length - 1) {
+                    const divider = document.createElement('div');
+                    divider.className = 'transition-divider py-5 flex justify-center items-center relative my-1';
+                    divider.innerHTML = `
+                        <div class="absolute w-full h-px bg-slate-200"></div>
+                        <button type="button" class="transition-add-btn relative z-10 w-8 h-8 rounded-full bg-indigo-600 hover:bg-indigo-700 text-white flex items-center justify-center font-bold shadow transition transform hover:scale-110" data-target-page="${page.number + 1}">
+                            +
+                        </button>
+                        <span class="transition-label absolute mt-12 text-[9px] font-bold text-slate-400 bg-slate-50 px-2 py-0.5 rounded border border-slate-200 shadow-sm" id="transition-label-${page.number + 1}">
+                            No Transition (Standard scroll)
+                        </span>
+                    `;
+                    
+                    divider.querySelector('.transition-add-btn').addEventListener('click', (e) => openTransitionModal(page.number + 1, e));
+                    workspace.appendChild(divider);
+                }
+            });
+        }
+
+        // Dropdown page selector setup
+        function populatePageSelectScroll() {
+            const select = document.getElementById('config-link-target-scroll');
+            select.innerHTML = '';
+            pdfData.forEach(p => {
+                const opt = document.createElement('option');
+                opt.value = `#page-${p.number}`;
+                opt.textContent = `Scroll to Page ${p.number}`;
+                select.appendChild(opt);
+            });
+        }
+
+        function toggleLinkTargetInputs() {
+            const type = document.getElementById('config-link-type').value;
+            const urlInput = document.getElementById('config-link-target-url');
+            const scrollSelect = document.getElementById('config-link-target-scroll');
+            const label = document.getElementById('config-link-target-label');
+            
+            if (type === 'url') {
+                urlInput.classList.remove('hidden');
+                scrollSelect.classList.add('hidden');
+                label.textContent = "Target URL";
+            } else {
+                urlInput.classList.add('hidden');
+                scrollSelect.classList.remove('hidden');
+                label.textContent = "Target Section";
+            }
+        }
+
+        // Modal triggers
+        function openLinkModal(textSpan, event) {
+            event.stopPropagation();
+            closeTransitionModal();
+            const modal = document.getElementById('link-configurator');
+            modal.classList.remove('hidden');
+            
+            const rect = textSpan.getBoundingClientRect();
+            modal.style.top = `${rect.bottom + window.scrollY + 5}px`;
+            modal.style.left = `${rect.left + window.scrollX}px`;
+            
+            document.getElementById('config-selected-text').textContent = textSpan.dataset.text;
+            activeSpan = textSpan;
+            
+            const pageNum = parseInt(textSpan.dataset.pageNum);
+            const bbox = JSON.parse(textSpan.dataset.bbox);
+            const existing = findCustomLink(pageNum, bbox);
+            
+            const deleteBtn = document.getElementById('config-delete-btn');
+            if (existing) {
+                deleteBtn.classList.remove('hidden');
+                document.getElementById('config-link-type').value = existing.href.startsWith('#page-') ? 'scroll' : 'url';
+                toggleLinkTargetInputs();
+                if (existing.href.startsWith('#page-')) {
+                    document.getElementById('config-link-target-scroll').value = existing.href;
+                } else {
+                    document.getElementById('config-link-target-url').value = existing.href;
+                }
+                document.getElementById('config-hover-effect').value = existing.hover_effect || 'glow';
+            } else {
+                deleteBtn.classList.add('hidden');
+                document.getElementById('config-link-type').value = 'url';
+                toggleLinkTargetInputs();
+                document.getElementById('config-link-target-url').value = '';
+                document.getElementById('config-hover-effect').value = 'glow';
+            }
+        }
+
+        function closeLinkModal() {
+            document.getElementById('link-configurator').classList.add('hidden');
+            activeSpan = null;
+        }
+
+        function openTransitionModal(targetPageNum, event) {
+            event.stopPropagation();
+            closeLinkModal();
+            const modal = document.getElementById('transition-configurator');
+            modal.classList.remove('hidden');
+            
+            const btn = event.currentTarget;
+            const rect = btn.getBoundingClientRect();
+            modal.style.top = `${rect.bottom + window.scrollY + 5}px`;
+            modal.style.left = `${rect.left + window.scrollX - 120}px`;
+            
+            activeTransitionTarget = targetPageNum;
+            document.getElementById('transition-effect-select').value = transitions[targetPageNum] || '';
+        }
+
+        function closeTransitionModal() {
+            document.getElementById('transition-configurator').classList.add('hidden');
+            activeTransitionTarget = null;
+        }
+
+        // Link mappings
+        function findCustomLink(pageNum, bbox) {
+            return customLinks.find(l => l.page === pageNum && JSON.stringify(l.bbox) === JSON.stringify(bbox));
+        }
+
+        function saveActiveLink() {
+            if (!activeSpan) return;
+            const pageNum = parseInt(activeSpan.dataset.pageNum);
+            const bbox = JSON.parse(activeSpan.dataset.bbox);
+            const text = activeSpan.dataset.text;
+            
+            const type = document.getElementById('config-link-type').value;
+            const href = type === 'url' ? document.getElementById('config-link-target-url').value.trim() : document.getElementById('config-link-target-scroll').value;
+            const hover_effect = document.getElementById('config-hover-effect').value;
+            
+            if (type === 'url' && !href) {
+                alert("Please enter a target URL");
+                return;
+            }
+            
+            // Remove previous configurations of this target text
+            customLinks = customLinks.filter(l => !(l.page === pageNum && JSON.stringify(l.bbox) === JSON.stringify(bbox)));
+            
+            customLinks.push({
+                page: pageNum,
+                bbox: bbox,
+                text: text,
+                href: href,
+                hover_effect: hover_effect,
+                target_blank: type === 'url'
+            });
+            
+            activeSpan.classList.add('has-link');
+            closeLinkModal();
+            updateHotspotsList();
+        }
+
+        function deleteActiveLink() {
+            if (!activeSpan) return;
+            const pageNum = parseInt(activeSpan.dataset.pageNum);
+            const bbox = JSON.parse(activeSpan.dataset.bbox);
+            
+            customLinks = customLinks.filter(l => !(l.page === pageNum && JSON.stringify(l.bbox) === JSON.stringify(bbox)));
+            activeSpan.classList.remove('has-link');
+            closeLinkModal();
+            updateHotspotsList();
+        }
+
+        function saveTransition() {
+            if (!activeTransitionTarget) return;
+            const effect = document.getElementById('transition-effect-select').value;
+            const label = document.getElementById(`transition-label-${activeTransitionTarget}`);
+            
+            if (effect) {
+                transitions[activeTransitionTarget] = effect;
+                label.textContent = "Transition: " + effect.toUpperCase();
+                label.classList.add('text-indigo-600', 'border-indigo-200', 'bg-indigo-50');
+            } else {
+                delete transitions[activeTransitionTarget];
+                label.textContent = "No Transition (Standard scroll)";
+                label.classList.remove('text-indigo-600', 'border-indigo-200', 'bg-indigo-50');
+            }
+            closeTransitionModal();
+        }
+
+        function updateHotspotsList() {
+            const list = document.getElementById('hotspots-list');
+            if (customLinks.length === 0) {
+                list.innerHTML = 'No custom links or buttons mapped yet. Click on any text on the left to add one!';
+                return;
+            }
+            list.innerHTML = '';
+            customLinks.forEach((l, idx) => {
+                const item = document.createElement('div');
+                item.className = 'p-2 bg-slate-50 border border-slate-100 rounded flex justify-between items-center';
+                item.innerHTML = `
+                    <div class="truncate pr-2">
+                        <span class="font-bold text-slate-700">"${l.text}"</span>
+                        <span class="block text-[10px] text-slate-400">Page ${l.page} → ${l.href} (${l.hover_effect})</span>
+                    </div>
+                    <button type="button" onclick="removeHotspotByIndex(${idx})" class="text-rose-500 hover:text-rose-700 font-bold">×</button>
+                `;
+                list.appendChild(item);
+            });
+        }
+
+        function removeHotspotByIndex(index) {
+            const l = customLinks[index];
+            const pageContainer = document.getElementById('editor-workspace').children[(l.page - 1) * 2];
+            const textLayer = pageContainer.querySelector('.interactive-overlay') || pageContainer.children[2];
+            
+            // Find target span and restore visual highlight state
+            const spans = textLayer.children;
+            for (let s of spans) {
+                if (s.dataset.pageNum == l.page && s.dataset.bbox === JSON.stringify(l.bbox)) {
+                    s.classList.remove('has-link');
+                    break;
+                }
+            }
+            customLinks.splice(index, 1);
+            updateHotspotsList();
+        }
+
+        // Global tool hiding trigger
+        document.body.addEventListener('click', () => {
+            closeLinkModal();
+            closeTransitionModal();
+        });
+
+        // Phase 3: Post back stateless configurations and trigger file download
+        function triggerBuild() {
+            const exportBtn = document.querySelector('#editor-actions button');
+            exportBtn.disabled = true;
+            exportBtn.textContent = "Compiling Site Assets...";
+            
+            const payload = {
+                layout_mode: document.getElementById('layout-mode').value,
+                meta_title: document.getElementById('meta-title').value,
+                meta_desc: document.getElementById('meta-desc').value,
+                ga_id: document.getElementById('ga-id').value,
+                form_action: document.getElementById('form-action').value,
+                pages: pdfData,
+                transitions: transitions,
+                custom_links: customLinks
+            };
+            
+            fetch('/compile', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            })
+            .then(res => {
+                if (!res.ok) throw new Error("Compiler threw an error.");
+                return res.blob();
+            })
+            .then(blob => {
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = payload.layout_mode === 'single' ? "index.html" : "website_files.zip";
+                document.body.appendChild(a);
+                a.click();
+                a.remove();
+                
+                exportBtn.disabled = false;
+                exportBtn.textContent = "Export Static Website";
+            })
+            .catch(err => {
+                alert("Compilation failed: " + err);
+                exportBtn.disabled = false;
+                exportBtn.textContent = "Export Static Website";
+            });
+        }
     </script>
 </body>
 </html>
