@@ -149,12 +149,12 @@
         </div>
     </div>
 
-    <!-- FLOATING TRANSITION SELECTOR TOOLTIP -->
+    <!-- FLOATING TRANSITION SELECTOR TOOLTIP (UPGRADED WITH DYNAMIC CUSTOM OPTIONS) -->
     <div id="transition-configurator" class="hidden absolute bg-white border border-slate-200 shadow-2xl rounded-xl p-4 z-50 w-72 space-y-3">
         <h4 class="text-xs font-black text-slate-700 uppercase tracking-wider">Page Scroll Transition</h4>
         <p class="text-[10px] text-slate-400">Choose the transition effect when sliding into this section.</p>
         <div>
-            <select id="transition-effect-select" class="w-full text-xs rounded border border-slate-200 py-1.5 px-2 bg-white">
+            <select id="transition-effect-select" onchange="showCustomTransitionOptions(this.value)" class="w-full text-xs rounded border border-slate-200 py-1.5 px-2 bg-white border">
                 <option value="">No Transition (Standard scroll)</option>
                 <option value="sticky-cards">1. Sticky Stacking Cards (Section stack over scroll)</option>
                 <option value="clip-reveal">2. Clip-Path Reveal (Cinematic circle zoom expansion)</option>
@@ -166,6 +166,12 @@
                 <option value="reveal">Wipe Reveal (Bottom-to-top mask wipe)</option>
             </select>
         </div>
+        
+        <!-- Dynamic transition customization parameters placeholder -->
+        <div id="transition-custom-options" class="space-y-3">
+            <!-- Populated via Javascript -->
+        </div>
+
         <div class="flex justify-end gap-2 text-xs pt-1 border-t border-slate-50">
             <button type="button" onclick="closeTransitionModal()" class="text-slate-500 hover:text-slate-700 font-semibold px-2">Cancel</button>
             <button type="button" onclick="saveTransition()" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold px-3 py-1 rounded">Apply</button>
@@ -180,7 +186,7 @@
     <script>
         let pdfData = null;  // Holds page payloads in memory
         let customLinks = []; // Holds user custom hotspot links
-        let transitions = {}; // Holds transitions mapped "page": "effect"
+        let transitions = {}; // Holds transitions mapped "page": configurationObject
         let activeSpan = null; // Active span being configured
         let activeTransitionTarget = null; // Target page receiving transition config
 
@@ -395,6 +401,88 @@
             activeSpan = null;
         }
 
+        // Render dynamic customization sub-form inside the configurator window
+        function showCustomTransitionOptions(effect) {
+            const container = document.getElementById('transition-custom-options');
+            container.innerHTML = '';
+            if (!effect) return;
+            
+            let html = `
+                <div class="space-y-1">
+                    <label class="block text-[9px] font-bold text-slate-400 uppercase">Transition Speed</label>
+                    <select id="trans-speed" class="w-full text-xs rounded border border-slate-200 py-1.5 px-2 bg-white select-box">
+                        <option value="0.5s">0.5s (Fast)</option>
+                        <option value="0.9s" selected>0.9s (Medium)</option>
+                        <option value="1.5s">1.5s (Slow)</option>
+                    </select>
+                </div>
+            `;
+            
+            if (effect === 'sticky-cards') {
+                html += `
+                    <div class="space-y-1">
+                        <label class="block text-[9px] font-bold text-slate-400 uppercase">Stick Offset (Top Margin)</label>
+                        <select id="trans-sticky-offset" class="w-full text-xs rounded border border-slate-200 py-1.5 px-2 bg-white select-box">
+                            <option value="0px" selected>0px (Full Screen)</option>
+                            <option value="20px">20px (Overlapping Stack)</option>
+                            <option value="40px">40px (Staggered Stack)</option>
+                        </select>
+                    </div>
+                `;
+            } else if (effect === 'clip-reveal') {
+                html += `
+                    <div class="space-y-1">
+                        <label class="block text-[9px] font-bold text-slate-400 uppercase">Clip Shape</label>
+                        <select id="trans-clip-shape" class="w-full text-xs rounded border border-slate-200 py-1.5 px-2 bg-white select-box">
+                            <option value="circle" selected>Circle (Cinematic)</option>
+                            <option value="rectangle">Rectangle (Wipe Zoom)</option>
+                            <option value="diamond">Diamond (Geometric Reveal)</option>
+                        </select>
+                    </div>
+                    <div class="space-y-1">
+                        <label class="block text-[9px] font-bold text-slate-400 uppercase">Origin Position</label>
+                        <select id="trans-clip-origin" class="w-full text-xs rounded border border-slate-200 py-1.5 px-2 bg-white select-box">
+                            <option value="center" selected>Center</option>
+                            <option value="top-left">Top Left</option>
+                            <option value="bottom-right">Bottom Right</option>
+                        </select>
+                    </div>
+                `;
+            } else if (effect === 'split-screen') {
+                html += `
+                    <div class="space-y-1">
+                        <label class="block text-[9px] font-bold text-slate-400 uppercase">Split Direction</label>
+                        <select id="trans-split-direction" class="w-full text-xs rounded border border-slate-200 py-1.5 px-2 bg-white select-box">
+                            <option value="vertical" selected>Vertical Columns (Left/Right)</option>
+                            <option value="horizontal">Horizontal Rows (Top/Bottom)</option>
+                        </select>
+                    </div>
+                `;
+            } else if (effect === 'horizontal-snap') {
+                html += `
+                    <div class="space-y-1">
+                        <label class="block text-[9px] font-bold text-slate-400 uppercase">Slide Direction</label>
+                        <select id="trans-slide-direction" class="w-full text-xs rounded border border-slate-200 py-1.5 px-2 bg-white select-box">
+                            <option value="right-to-left" selected>Right to Left</option>
+                            <option value="left-to-right">Left to Right</option>
+                        </select>
+                    </div>
+                `;
+            } else if (effect === 'reveal') {
+                html += `
+                    <div class="space-y-1">
+                        <label class="block text-[9px] font-bold text-slate-400 uppercase">Wipe Direction</label>
+                        <select id="trans-wipe-direction" class="w-full text-xs rounded border border-slate-200 py-1.5 px-2 bg-white select-box">
+                            <option value="bottom-to-top" selected>Bottom to Top</option>
+                            <option value="top-to-bottom">Top to Bottom</option>
+                        </select>
+                    </div>
+                `;
+            }
+            
+            container.innerHTML = html;
+        }
+
         function openTransitionModal(targetPageNum, event) {
             event.stopPropagation();
             closeLinkModal();
@@ -407,7 +495,32 @@
             modal.style.left = `${rect.left + window.scrollX - 120}px`;
             
             activeTransitionTarget = targetPageNum;
-            document.getElementById('transition-effect-select').value = transitions[targetPageNum] || '';
+            
+            const existing = transitions[targetPageNum];
+            if (existing) {
+                const effect = typeof existing === 'string' ? existing : existing.effect;
+                document.getElementById('transition-effect-select').value = effect;
+                showCustomTransitionOptions(effect);
+                
+                if (typeof existing === 'object') {
+                    document.getElementById('trans-speed').value = existing.speed || '0.9s';
+                    if (effect === 'sticky-cards') {
+                        document.getElementById('trans-sticky-offset').value = existing.offset || '0px';
+                    } else if (effect === 'clip-reveal') {
+                        document.getElementById('trans-clip-shape').value = existing.shape || 'circle';
+                        document.getElementById('trans-clip-origin').value = existing.origin || 'center';
+                    } else if (effect === 'split-screen') {
+                        document.getElementById('trans-split-direction').value = existing.split_direction || 'vertical';
+                    } else if (effect === 'horizontal-snap') {
+                        document.getElementById('trans-slide-direction').value = existing.slide_direction || 'right-to-left';
+                    } else if (effect === 'reveal') {
+                        document.getElementById('trans-wipe-direction').value = existing.wipe_direction || 'bottom-to-top';
+                    }
+                }
+            } else {
+                document.getElementById('transition-effect-select').value = '';
+                showCustomTransitionOptions('');
+            }
         }
 
         function closeTransitionModal() {
@@ -435,7 +548,6 @@
                 return;
             }
             
-            // Remove previous configurations of this target text
             customLinks = customLinks.filter(l => !(l.page === pageNum && JSON.stringify(l.bbox) === JSON.stringify(bbox)));
             
             customLinks.push({
@@ -463,13 +575,32 @@
             updateHotspotsList();
         }
 
+        // Apply customized transition parameters into configuration variables object
         function saveTransition() {
             if (!activeTransitionTarget) return;
             const effect = document.getElementById('transition-effect-select').value;
             const label = document.getElementById(`transition-label-${activeTransitionTarget}`);
             
             if (effect) {
-                transitions[activeTransitionTarget] = effect;
+                const config = {
+                    effect: effect,
+                    speed: document.getElementById('trans-speed').value
+                };
+                
+                if (effect === 'sticky-cards') {
+                    config.offset = document.getElementById('trans-sticky-offset').value;
+                } else if (effect === 'clip-reveal') {
+                    config.shape = document.getElementById('trans-clip-shape').value;
+                    config.origin = document.getElementById('trans-clip-origin').value;
+                } else if (effect === 'split-screen') {
+                    config.split_direction = document.getElementById('trans-split-direction').value;
+                } else if (effect === 'horizontal-snap') {
+                    config.slide_direction = document.getElementById('trans-slide-direction').value;
+                } else if (effect === 'reveal') {
+                    config.wipe_direction = document.getElementById('trans-wipe-direction').value;
+                }
+                
+                transitions[activeTransitionTarget] = config;
                 label.textContent = "Transition: " + effect.toUpperCase();
                 label.classList.add('text-indigo-600', 'border-indigo-200', 'bg-indigo-50');
             } else {
@@ -506,7 +637,6 @@
             const pageContainer = document.getElementById('editor-workspace').children[(l.page - 1) * 2];
             const textLayer = pageContainer.querySelector('.interactive-overlay') || pageContainer.children[2];
             
-            // Find target span and restore visual highlight state
             const spans = textLayer.children;
             for (let s of spans) {
                 if (s.dataset.pageNum == l.page && s.dataset.bbox === JSON.stringify(l.bbox)) {
@@ -518,19 +648,15 @@
             updateHotspotsList();
         }
 
-        
-        // CORRECTED GLOBAL CLICK LISTENER
+        // CORRECTED GLOBAL CLICK LISTENER [3]
         document.addEventListener('click', (e) => {
             const linkConfig = document.getElementById('link-configurator');
             const transConfig = document.getElementById('transition-configurator');
             
-            // 1. Only close the link modal if the click was outside the modal AND not on an editable text span
             if (!linkConfig.contains(e.target) && !e.target.classList.contains('editor-text-span')) {
                 closeLinkModal();
             }
             
-            // 2. Only close the transition modal if the click was outside the modal AND not on the '+' button
-            // Using .closest handles cases where users click the inner "+" symbol text
             if (!transConfig.contains(e.target) && !e.target.closest('.transition-add-btn')) {
                 closeTransitionModal();
             }
