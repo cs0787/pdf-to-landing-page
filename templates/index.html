@@ -123,19 +123,19 @@
         </div>
         <div>
             <label class="block text-[9px] font-bold text-slate-400 uppercase">Destination Type</label>
-            <select id="config-link-type" onchange="toggleLinkTargetInputs()" class="w-full text-xs rounded border-slate-200 py-1.5 px-2 mt-1 bg-white border">
+            <select id="config-link-type" onchange="toggleLinkTargetInputs()" class="w-full text-xs rounded border border-slate-200 py-1.5 px-2 mt-1 bg-white border">
                 <option value="url">External URL (https://...)</option>
                 <option value="scroll">Scroll to Page Section</option>
             </select>
         </div>
         <div>
             <label class="block text-[9px] font-bold text-slate-400 uppercase" id="config-link-target-label">Target URL</label>
-            <input type="text" id="config-link-target-url" placeholder="https://example.com" class="w-full text-xs rounded border-slate-200 py-1.5 px-2 mt-1 border">
-            <select id="config-link-target-scroll" class="hidden w-full text-xs rounded border-slate-200 py-1.5 px-2 mt-1 bg-white border"></select>
+            <input type="text" id="config-link-target-url" placeholder="https://example.com" class="w-full text-xs rounded border border-slate-200 py-1.5 px-2 mt-1 border">
+            <select id="config-link-target-scroll" class="hidden w-full text-xs rounded border border-slate-200 py-1.5 px-2 mt-1 bg-white border"></select>
         </div>
         <div>
             <label class="block text-[9px] font-bold text-slate-400 uppercase">Hover Effect Style</label>
-            <select id="config-hover-effect" class="w-full text-xs rounded border-slate-200 py-1.5 px-2 mt-1 bg-white border">
+            <select id="config-hover-effect" class="w-full text-xs rounded border border-slate-200 py-1.5 px-2 mt-1 bg-white border">
                 <option value="glow">Glassmorphic Glow (Lights up Underlying Image)</option>
                 <option value="lift">3D Float Lift (Slides Up + Soft Shadow)</option>
                 <option value="pulse">Soft Pulse (Gently scales up)</option>
@@ -237,6 +237,11 @@
                     resetUploader();
                 } else {
                     pdfData = data.pages;
+                    
+                    // HYDRATION: Automatically ingest server-detected links into editor canvas state
+                    customLinks = data.auto_links || [];
+                    updateHotspotsList();
+                    
                     document.getElementById('uploader-panel').classList.add('hidden');
                     document.getElementById('workspace-panel').classList.remove('hidden');
                     document.getElementById('editor-actions').classList.remove('hidden');
@@ -301,6 +306,12 @@
                     textSpan.dataset.text = span.text;
                     textSpan.dataset.pageNum = page.number;
                     textSpan.dataset.bbox = JSON.stringify(span.bbox);
+                    
+                    // Highlight the bounding box if it already contains an auto-detected or saved link
+                    const existing = findCustomLink(page.number, span.bbox);
+                    if (existing) {
+                        textSpan.classList.add('has-link');
+                    }
                     
                     textSpan.addEventListener('click', (e) => openLinkModal(textSpan, e));
                     
@@ -410,7 +421,7 @@
             let html = `
                 <div class="space-y-1">
                     <label class="block text-[9px] font-bold text-slate-400 uppercase">Transition Speed</label>
-                    <select id="trans-speed" class="w-full text-xs rounded border border-slate-200 py-1.5 px-2 bg-white select-box">
+                    <select id="trans-speed" class="w-full text-xs rounded border border-slate-200 py-1.5 px-2 bg-white select-box border">
                         <option value="0.5s">0.5s (Fast)</option>
                         <option value="0.9s" selected>0.9s (Medium)</option>
                         <option value="1.5s">1.5s (Slow)</option>
@@ -421,11 +432,12 @@
             if (effect === 'sticky-cards') {
                 html += `
                     <div class="space-y-1">
-                        <label class="block text-[9px] font-bold text-slate-400 uppercase">Stick Offset (Top Margin)</label>
-                        <select id="trans-sticky-offset" class="w-full text-xs rounded border border-slate-200 py-1.5 px-2 bg-white select-box">
-                            <option value="0px" selected>0px (Full Screen)</option>
-                            <option value="20px">20px (Overlapping Stack)</option>
-                            <option value="40px">40px (Staggered Stack)</option>
+                        <label class="block text-[9px] font-bold text-slate-400 uppercase">Stick Offset (Top Margin) [2]</label>
+                        <select id="trans-sticky-offset" class="w-full text-xs rounded border border-slate-200 py-1.5 px-2 bg-white select-box border">
+                            <option value="0px" selected>0px (Full Screen Stacking)</option>
+                            <option value="20px">20px (Partial Overlap)</option>
+                            <option value="40px">40px (Staggered Overlap)</option>
+                            <option value="60px">60px (Comfortable Stack)</option>
                         </select>
                     </div>
                 `;
@@ -433,7 +445,7 @@
                 html += `
                     <div class="space-y-1">
                         <label class="block text-[9px] font-bold text-slate-400 uppercase">Clip Shape</label>
-                        <select id="trans-clip-shape" class="w-full text-xs rounded border border-slate-200 py-1.5 px-2 bg-white select-box">
+                        <select id="trans-clip-shape" class="w-full text-xs rounded border border-slate-200 py-1.5 px-2 bg-white select-box border">
                             <option value="circle" selected>Circle (Cinematic)</option>
                             <option value="rectangle">Rectangle (Wipe Zoom)</option>
                             <option value="diamond">Diamond (Geometric Reveal)</option>
@@ -441,7 +453,7 @@
                     </div>
                     <div class="space-y-1">
                         <label class="block text-[9px] font-bold text-slate-400 uppercase">Origin Position</label>
-                        <select id="trans-clip-origin" class="w-full text-xs rounded border border-slate-200 py-1.5 px-2 bg-white select-box">
+                        <select id="trans-clip-origin" class="w-full text-xs rounded border border-slate-200 py-1.5 px-2 bg-white select-box border">
                             <option value="center" selected>Center</option>
                             <option value="top-left">Top Left</option>
                             <option value="bottom-right">Bottom Right</option>
@@ -452,7 +464,7 @@
                 html += `
                     <div class="space-y-1">
                         <label class="block text-[9px] font-bold text-slate-400 uppercase">Split Direction</label>
-                        <select id="trans-split-direction" class="w-full text-xs rounded border border-slate-200 py-1.5 px-2 bg-white select-box">
+                        <select id="trans-split-direction" class="w-full text-xs rounded border border-slate-200 py-1.5 px-2 bg-white select-box border">
                             <option value="vertical" selected>Vertical Columns (Left/Right)</option>
                             <option value="horizontal">Horizontal Rows (Top/Bottom)</option>
                         </select>
@@ -462,7 +474,7 @@
                 html += `
                     <div class="space-y-1">
                         <label class="block text-[9px] font-bold text-slate-400 uppercase">Slide Direction</label>
-                        <select id="trans-slide-direction" class="w-full text-xs rounded border border-slate-200 py-1.5 px-2 bg-white select-box">
+                        <select id="trans-slide-direction" class="w-full text-xs rounded border border-slate-200 py-1.5 px-2 bg-white select-box border">
                             <option value="right-to-left" selected>Right to Left</option>
                             <option value="left-to-right">Left to Right</option>
                         </select>
@@ -472,7 +484,7 @@
                 html += `
                     <div class="space-y-1">
                         <label class="block text-[9px] font-bold text-slate-400 uppercase">Wipe Direction</label>
-                        <select id="trans-wipe-direction" class="w-full text-xs rounded border border-slate-200 py-1.5 px-2 bg-white select-box">
+                        <select id="trans-wipe-direction" class="w-full text-xs rounded border border-slate-200 py-1.5 px-2 bg-white select-box border">
                             <option value="bottom-to-top" selected>Bottom to Top</option>
                             <option value="top-to-bottom">Top to Bottom</option>
                         </select>
@@ -528,9 +540,15 @@
             activeTransitionTarget = null;
         }
 
-        // Link mappings
+        // Link mappings with float tolerance limits
         function findCustomLink(pageNum, bbox) {
-            return customLinks.find(l => l.page === pageNum && JSON.stringify(l.bbox) === JSON.stringify(bbox));
+            return customLinks.find(l => {
+                if (l.page !== pageNum) return false;
+                return Math.abs(l.bbox[0] - bbox[0]) < 0.5 &&
+                       Math.abs(l.bbox[1] - bbox[1]) < 0.5 &&
+                       Math.abs(l.bbox[2] - bbox[2]) < 0.5 &&
+                       Math.abs(l.bbox[3] - bbox[3]) < 0.5;
+            });
         }
 
         function saveActiveLink() {
