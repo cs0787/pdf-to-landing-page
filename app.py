@@ -11,7 +11,6 @@ app = Flask(__name__)
 app.secret_key = 'pdf_converter_secret_key'
 app.config['MAX_CONTENT_LENGTH'] = 50 * 1024 * 1024  # Limit uploads to 50MB
 
-# Helper to check if two bounding boxes overlap
 def rects_overlap(r1, r2):
     return not (r1.x1 <= r2.x0 or r2.x1 <= r1.x0 or r1.y1 <= r2.y0 or r2.y1 <= r1.y0)
 
@@ -55,7 +54,7 @@ def get_page_filename(page_num, section_pages):
             return f"{section}.html"
     return f"page-{page_num}.html"
 
-# 3. Dynamic Form Field & Submit Overlays from raw placeholders
+# 3. Dynamic Form Field & Submit Overlays
 def generate_form_fields_layer(page, page_width, page_height):
     fields_html = []
     try:
@@ -270,48 +269,64 @@ def get_base_styles():
         .form-submit-btn:hover { background-color: #1d4ed8; transform: translateY(-2px); box-shadow: 0 10px 15px -3px rgba(37, 99, 235, 0.3), 0 4px 6px -2px rgba(37, 99, 235, 0.15); }
         .form-submit-btn:active { transform: translateY(0); box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1); }
 
-        /* ADVANCED TRANSITIONS [3] */
+        /* ADVANCED TRANSITIONS CSS VARIABLE MAPPINGS [3] */
         .page-container[data-transition] {
-            transition: all 0.9s cubic-bezier(0.25, 1, 0.5, 1);
+            transition: all var(--transition-speed, 0.9s) cubic-bezier(0.25, 1, 0.5, 1);
             will-change: transform, opacity, clip-path;
         }
         
+        /* Disable parent container transition for split-screen to prevent double animation conflicts */
         html.js-enabled .page-container[data-transition="split-screen"] {
             opacity: 1 !important; transform: none !important; clip-path: none !important;
         }
         
         /* Clip-Path Reveal */
-        html.js-enabled .page-container[data-transition="clip-reveal"] { clip-path: circle(0% at 50% 50%); }
-        html.js-enabled .page-container[data-transition="clip-reveal"].is-visible { clip-path: circle(150% at 50% 50%); }
+        html.js-enabled .page-container[data-transition="clip-reveal"] { 
+            clip-path: var(--start-clip, circle(0% at 50% 50%)); 
+        }
+        html.js-enabled .page-container[data-transition="clip-reveal"].is-visible { 
+            clip-path: var(--end-clip, circle(150% at 50% 50%)); 
+        }
         
         /* Vertical Split-Screen Columns */
         html.js-enabled .page-container[data-transition="split-screen"] .left-half {
-            transform: translateY(-80px); opacity: 0;
-            transition: transform 0.9s cubic-bezier(0.25, 1, 0.5, 1), opacity 0.9s ease-out;
+            transform: var(--left-start, translateY(-80px)); opacity: 0;
+            transition: transform var(--transition-speed, 0.9s) cubic-bezier(0.25, 1, 0.5, 1), opacity var(--transition-speed, 0.9s) ease-out;
         }
-        html.js-enabled .page-container[data-transition="split-screen"].is-visible .left-half { transform: translateY(0); opacity: 1; }
+        html.js-enabled .page-container[data-transition="split-screen"].is-visible .left-half { transform: translate(0) !important; opacity: 1; }
         
         html.js-enabled .page-container[data-transition="split-screen"] .right-half {
-            transform: translateY(80px); opacity: 0;
-            transition: transform 0.9s cubic-bezier(0.25, 1, 0.5, 1), opacity 0.9s ease-out;
+            transform: var(--right-start, translateY(80px)); opacity: 0;
+            transition: transform var(--transition-speed, 0.9s) cubic-bezier(0.25, 1, 0.5, 1), opacity var(--transition-speed, 0.9s) ease-out;
         }
-        html.js-enabled .page-container[data-transition="split-screen"].is-visible .right-half { transform: translateY(0); opacity: 1; }
+        html.js-enabled .page-container[data-transition="split-screen"].is-visible .right-half { transform: translate(0) !important; opacity: 1; }
         
         /* Horizontal Scroll Snap */
-        html.js-enabled .page-container[data-transition="horizontal-snap"] { transform: translateX(100%); opacity: 0; }
-        html.js-enabled .page-container[data-transition="horizontal-snap"].is-visible { transform: translateX(0); opacity: 1; }
+        html.js-enabled .page-container[data-transition="horizontal-snap"] { 
+            clip-path: var(--start-clip, inset(0 0 0 100%)); 
+        }
+        html.js-enabled .page-container[data-transition="horizontal-snap"].is-visible { 
+            clip-path: var(--end-clip, inset(0 0 0 0)); 
+        }
+        html.js-enabled .page-container[data-transition="horizontal-snap"] img {
+            transform: var(--start-translate, translateX(60px));
+            transition: transform var(--transition-speed, 0.9s) cubic-bezier(0.25, 1, 0.5, 1);
+        }
+        html.js-enabled .page-container[data-transition="horizontal-snap"].is-visible img {
+            transform: translateX(0);
+        }
 
         /* Standard scroll transitions */
         html.js-enabled .page-container[data-transition="fade"] { opacity: 0; }
         html.js-enabled .page-container[data-transition="fade"].is-visible { opacity: 1; }
         
-        html.js-enabled .page-container[data-transition="slide-up"] { opacity: 0; transform: translateY(60px); }
+        html.js-enabled .page-container[data-transition="slide-up"] { opacity: 0; transform: var(--start-translate, translateY(60px)); }
         html.js-enabled .page-container[data-transition="slide-up"].is-visible { opacity: 1; transform: translateY(0); }
         
-        html.js-enabled .page-container[data-transition="zoom-in"] { opacity: 0; transform: scale(0.93); }
+        html.js-enabled .page-container[data-transition="zoom-in"] { opacity: 0; transform: var(--start-translate, scale(0.93)); }
         html.js-enabled .page-container[data-transition="zoom-in"].is-visible { opacity: 1; transform: scale(1); }
         
-        html.js-enabled .page-container[data-transition="reveal"] { clip-path: inset(100% 0 0 0); }
+        html.js-enabled .page-container[data-transition="reveal"] { clip-path: var(--start-clip, inset(100% 0 0 0)); }
         html.js-enabled .page-container[data-transition="reveal"].is-visible { clip-path: inset(0 0 0 0); }
 
         /* Multi-page load animations */
@@ -433,13 +448,26 @@ def compile_site():
             img_base64 = p_data["image"]
             aspect_ratio = p_data["aspect_ratio"]
             
-            transition_effect = transitions.get(str(p_num))
+            # Extract configured transition variables
+            t_config = transitions.get(str(p_num))
+            if isinstance(t_config, dict):
+                transition_effect = t_config.get("effect")
+                custom_opts = t_config
+            else:
+                transition_effect = t_config
+                custom_opts = {}
+
+            speed = custom_opts.get("speed", "0.9s")
+            css_vars = [f"--transition-speed: {speed}"]
+            
             transition_attr = f'data-transition="{transition_effect}"' if (transition_effect and not is_multipage_mode) else ''
             
-            # Page entrance animations
+            # Formulate entry load animations (multi-page separate documents)
             animation_style = ""
             left_animation = ""
             right_animation = ""
+            
+            # Multi-page transition mappings
             if is_multipage_mode and transition_effect:
                 if transition_effect == "fade":
                     animation_style = "animation: fadeIn 0.7s ease-out forwards;"
@@ -457,6 +485,57 @@ def compile_site():
                 elif transition_effect == "horizontal-snap":
                     animation_style = "animation: horizontalSnapIn 0.8s cubic-bezier(0.25, 1, 0.5, 1) forwards;"
 
+            # Compile CSS variables inline based on custom user-selections
+            if transition_effect == "clip-reveal":
+                shape = custom_opts.get("shape", "circle")
+                origin_str = custom_opts.get("origin", "center")
+                origin_coords = "50% 50%"
+                if origin_str == "top-left": origin_coords = "0% 0%"
+                elif origin_str == "bottom-right": origin_coords = "100% 100%"
+                
+                if shape == "circle":
+                    css_vars.append(f"--start-clip: circle(0% at {origin_coords})")
+                    css_vars.append(f"--end-clip: circle(150% at {origin_coords})")
+                elif shape == "rectangle":
+                    css_vars.append(f"--start-clip: inset(50% 50% 50% 50%)")
+                    css_vars.append(f"--end-clip: inset(0% 0% 0% 0%)")
+                elif shape == "diamond":
+                    css_vars.append(f"--start-clip: polygon(50% 50%, 50% 50%, 50% 50%, 50% 50%)")
+                    css_vars.append(f"--end-clip: polygon(50% 0%, 100% 50%, 50% 100%, 0% 50%)")
+                    
+            elif transition_effect == "split-screen":
+                split_dir = custom_opts.get("split_direction", "vertical")
+                if split_dir == "vertical":
+                    css_vars.append("--left-start: translateY(-80px)")
+                    css_vars.append("--right-start: translateY(80px)")
+                else:
+                    css_vars.append("--left-start: translateX(-80px)")
+                    css_vars.append("--right-start: translateX(80px)")
+                    
+            elif transition_effect == "horizontal-snap":
+                slide_dir = custom_opts.get("slide_direction", "right-to-left")
+                if slide_dir == "right-to-left":
+                    css_vars.append("--start-clip: inset(0 0 0 100%)")
+                    css_vars.append("--end-clip: inset(0 0 0 0)")
+                    css_vars.append("--start-translate: translateX(60px)")
+                else:
+                    css_vars.append("--start-clip: inset(0 100% 0 0)")
+                    css_vars.append("--end-clip: inset(0 0 0 0)")
+                    css_vars.append("--start-translate: translateX(-60px)")
+                    
+            elif transition_effect == "reveal":
+                wipe_dir = custom_opts.get("wipe_direction", "bottom-to-top")
+                if wipe_dir == "bottom-to-top":
+                    css_vars.append("--start-clip: inset(100% 0 0 0)")
+                else:
+                    css_vars.append("--start-clip: inset(0 0 100% 0)")
+                    
+            elif transition_effect == "slide-up":
+                css_vars.append("--start-translate: translateY(60px)")
+            elif transition_effect == "zoom-in":
+                css_vars.append("--start-translate: scale(0.93)")
+
+            # Handle Vertical Split-screen (Clipped Columns)
             if transition_effect == "split-screen":
                 img_elements = f"""
                 <div class="left-half" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; overflow: hidden; clip-path: inset(0 50% 0 0); {left_animation}">
@@ -469,12 +548,26 @@ def compile_site():
             else:
                 img_elements = f'<img src="{img_base64}" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; display: block;" alt="Page {p_num}" />'
 
+            # 1. UPGRADED: Sticky Stacking cards trigger [2]
+            # We look at the NEXT page's transition to see if the CURRENT page must stick
             sticky_style = ""
-            if transition_effect == "sticky-cards" and not is_multipage_mode:
-                sticky_style = f"position: sticky; top: 0; z-index: {p_num}; box-shadow: 0 -15px 35px rgba(0,0,0,0.08);"
-
-            container_style = f"position: relative; width: 100%; max-width: {page_width}px; margin: 0 auto; background: #ffffff; z-index: {p_num}; {sticky_style} {animation_style}"
+            next_page_num = p_num + 1
+            next_page_config = transitions.get(str(next_page_num))
             
+            if isinstance(next_page_config, dict):
+                next_effect = next_page_config.get("effect")
+                sticky_offset = next_page_config.get("offset", "0px")
+            else:
+                next_effect = next_page_config
+                sticky_offset = "0px"
+                
+            if next_effect == "sticky-cards" and not is_multipage_mode:
+                sticky_style = f"position: sticky; top: {sticky_offset}; z-index: {p_num}; box-shadow: 0 10px 30px rgba(0,0,0,0.06);"
+
+            # Add CSS variables styles block to the wrapper
+            css_variables_style = "; ".join(css_vars)
+            container_style = f"position: relative; width: 100%; max-width: {page_width}px; margin: 0 auto; background: #ffffff; z-index: {p_num}; {sticky_style} {animation_style} {css_variables_style}"
+
             # Map absolute hyperlinks and customized hover states [2]
             link_overlays = []
             page_links = links_by_page.get(p_num, [])
