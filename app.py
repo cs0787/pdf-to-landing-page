@@ -11,6 +11,7 @@ app = Flask(__name__)
 app.secret_key = 'pdf_converter_secret_key'
 app.config['MAX_CONTENT_LENGTH'] = 50 * 1024 * 1024  # Limit uploads to 50MB
 
+# Helper to check if two bounding boxes overlap
 def rects_overlap(r1, r2):
     return not (r1.x1 <= r2.x0 or r2.x1 <= r1.x0 or r1.y1 <= r2.y0 or r2.y1 <= r1.y0)
 
@@ -54,7 +55,7 @@ def get_page_filename(page_num, section_pages):
             return f"{section}.html"
     return f"page-{page_num}.html"
 
-# 3. Dynamic Form Field & Submit Overlays
+# 3. Dynamic Form Field & Submit Overlays from raw placeholders
 def generate_form_fields_layer(page, page_width, page_height):
     fields_html = []
     try:
@@ -358,27 +359,30 @@ def process_pdf():
     try:
         pdf_bytes = file.read()
         doc = fitz.open(stream=pdf_bytes, filetype="pdf")
+        section_pages = index_document_sections(doc)
         
         pages_data = []
+        global_auto_links = []
+        
         for page_num in range(len(doc)):
             page = doc[page_num]
+            p_num = page_num + 1
             page_width = page.rect.width
             page_height = page.rect.height
             aspect_ratio = (page_height / page_width) * 100
             
-            # High-density render
+            # High-density WebP render
             zoom = 2.0
             mat = fitz.Matrix(zoom, zoom)
             pix = page.get_pixmap(matrix=mat)
             png_bytes = pix.tobytes("png")
             
-            # Compress to WebP
             img = Image.open(io.BytesIO(png_bytes))
             webp_io = io.BytesIO()
             img.save(webp_io, format="WEBP", quality=85)
             img_base64 = "data:image/webp;base64," + base64.b64encode(webp_io.getvalue()).decode("utf-8")
             
-            # Extract text spans [1]
+            # Extract standard text spans [1]
             spans = []
             dict_data = page.get_text("dict")
             for block in dict_data.get("blocks", []):
@@ -390,8 +394,62 @@ def process_pdf():
                                 "bbox": span["bbox"]  # [x0, y0, x1, y1]
                             })
             
+            # UNIFIED RUN: Process and attach all smart detected layers directly as custom_links
+            existing_rects = []
+            
+            # A. Native PDF Links (Canva/Figma manually added hotspots)
+            native_links = page.get_links()
+            for link in native_links:
+                href, target_blank = "", True
+                if "uri" in link:
+                    href = link["uri"]
+                elif "page" in link:
+                    href = f"#page-{link['page'] + 1}"
+                    target_blank = False
+                if href:
+                    rect = link["from"]
+                    existing_rects.append(rect)
+                    global_auto_links.append({
+                        "page": p_num,
+                        "bbox": [rect.x0, rect.y0, rect.x1, rect.y1],
+                        "href": href,
+                        "hover_effect": "glow",
+                        "text": page.get_text("text", clip=rect).strip() or "Manual PDF Link",
+                        "target_blank": target_blank
+                    })
+                    
+            # B. Smart Text Utilities (URLs, Emails, Phones)
+            utilities = extract_utilities(page)
+            for item in utilities:
+                if not any(rects_overlap(item["rect"], r) for r in existing_rects):
+                    rect = item["rect"]
+                    existing_rects.append(rect)
+                    global_auto_links.append({
+                        "page": p_num,
+                        "bbox": [rect.x0, rect.y0, rect.x1, rect.y1],
+                        "href": item["href"],
+                        "hover_effect": "glow",
+                        "text": page.get_text("text", clip=rect).strip() or "Utility Link",
+                        "target_blank": item.get("target") == 'target="_blank"'
+                    })
+                    
+            # C. Heuristic Button Intent Router (Contact Us, About, Home)
+            smart_buttons = detect_smart_button_intents(page, section_pages, is_multipage=False)
+            for btn in smart_buttons:
+                if not any(rects_overlap(btn["rect"], r) for r in existing_rects):
+                    rect = btn["rect"]
+                    existing_rects.append(rect)
+                    global_auto_links.append({
+                        "page": p_num,
+                        "bbox": [rect.x0, rect.y0, rect.x1, rect.y1],
+                        "href": btn["href"],
+                        "hover_effect": "glow",
+                        "text": page.get_text("text", clip=rect).strip() or "Intelligent Button",
+                        "target_blank": False
+                    })
+            
             pages_data.append({
-                "number": page_num + 1,
+                "number": p_num,
                 "width": page_width,
                 "height": page_height,
                 "aspect_ratio": aspect_ratio,
@@ -399,7 +457,10 @@ def process_pdf():
                 "spans": spans
             })
             
-        return jsonify({"pages": pages_data})
+        return jsonify({
+            "pages": pages_data,
+            "auto_links": global_auto_links
+        })
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
@@ -548,25 +609,35 @@ def compile_site():
             else:
                 img_elements = f'<img src="{img_base64}" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; display: block;" alt="Page {p_num}" />'
 
-            # 1. UPGRADED: Sticky Stacking cards trigger [2]
-            # We look at the NEXT page's transition to see if the CURRENT page must stick
+            # STICKY STACKING CARDS INTEGRATION ENGINE [2]
             sticky_style = ""
+            is_sticky = False
+            sticky_offset = "0px"
+            
+            # Case 1: The next page transitions using sticky cards (this page must stick as the base)
             next_page_num = p_num + 1
             next_page_config = transitions.get(str(next_page_num))
-            
-            if isinstance(next_page_config, dict):
-                next_effect = next_page_config.get("effect")
-                sticky_offset = next_page_config.get("offset", "0px")
-            else:
-                next_effect = next_page_config
+            if isinstance(next_page_config, dict) and next_page_config.get("effect") == "sticky-cards":
+                is_sticky = True
+                sticky_offset = "0px"
+            elif isinstance(next_page_config, str) and next_page_config == "sticky-cards":
+                is_sticky = True
                 sticky_offset = "0px"
                 
-            if next_effect == "sticky-cards" and not is_multipage_mode:
+            # Case 2: This page itself transitions using sticky cards (this page is a deck card and must stick)
+            if isinstance(t_config, dict) and t_config.get("effect") == "sticky-cards":
+                is_sticky = True
+                sticky_offset = t_config.get("offset", "0px")
+            elif isinstance(t_config, str) and t_config == "sticky-cards":
+                is_sticky = True
+                sticky_offset = "0px"
+                
+            if is_sticky and not is_multipage_mode:
                 sticky_style = f"position: sticky; top: {sticky_offset}; z-index: {p_num}; box-shadow: 0 10px 30px rgba(0,0,0,0.06);"
 
             # Add CSS variables styles block to the wrapper
             css_variables_style = "; ".join(css_vars)
-            container_style = f"position: relative; width: 100%; max-width: {page_width}px; margin: 0 auto; background: #ffffff; z-index: {p_num}; {sticky_style} {animation_style} {css_variables_style}"
+            container_style = f"position: relative; width: 100%; max-width: {page_width}px; margin: 0 auto; background: #ffffff; z-index: {p_num}; {sticky_style} {animation_style}; {css_variables_style}"
 
             # Map absolute hyperlinks and customized hover states [2]
             link_overlays = []
