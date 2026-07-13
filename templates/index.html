@@ -518,10 +518,22 @@
             updateHotspotsList();
         }
 
-        // Global tool hiding trigger
-        document.body.addEventListener('click', () => {
-            closeLinkModal();
-            closeTransitionModal();
+        
+        // CORRECTED GLOBAL CLICK LISTENER
+        document.addEventListener('click', (e) => {
+            const linkConfig = document.getElementById('link-configurator');
+            const transConfig = document.getElementById('transition-configurator');
+            
+            // 1. Only close the link modal if the click was outside the modal AND not on an editable text span
+            if (!linkConfig.contains(e.target) && !e.target.classList.contains('editor-text-span')) {
+                closeLinkModal();
+            }
+            
+            // 2. Only close the transition modal if the click was outside the modal AND not on the '+' button
+            // Using .closest handles cases where users click the inner "+" symbol text
+            if (!transConfig.contains(e.target) && !e.target.closest('.transition-add-btn')) {
+                closeTransitionModal();
+            }
         });
 
         // Phase 3: Post back stateless configurations and trigger file download
