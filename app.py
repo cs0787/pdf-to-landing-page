@@ -286,7 +286,7 @@ def compile_site():
                 </div>
                 """
             
-            # Map standard scroll transitions
+            # Map standard scroll transitions fallback styles
             elif transition_effect == "fade":
                 effect_class = "effect-fade"
             elif transition_effect == "slide-up":
@@ -458,7 +458,7 @@ def compile_site():
                 <section class="section-wrapper {effect_class}" style="{css_variables_style}; z-index: {p_num};">
                     {bleed_bg_html}
                     {mask_text_html}
-                    <div id="page-{p_num}" class="page-container" {transition_attr} style="{container_style}">
+                    <div id="page-{p_num}" class="page-container" style="{container_style}">
                         <div style="padding-top: {aspect_ratio}%;"></div>
                         {img_elements}
                         <div class="interactive-overlay" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%;">
@@ -507,48 +507,6 @@ def compile_site():
         {"".join(pages_body_html)}
     </main>
     {form_close}
-    
-    <script>
-    document.addEventListener("DOMContentLoaded", () => {{
-        const observerOptions = {{
-            root: null,
-            rootMargin: "0px",
-            threshold: 0.02
-        }};
-        const observer = new IntersectionObserver((entries, observer) => {{
-            entries.forEach(entry => {{
-                if (entry.isIntersecting) {{
-                    const target = entry.target;
-                    target.classList.add("is-visible");
-                    setTimeout(() => {{
-                        const leftHalf = target.querySelector('.left-half');
-                        const rightHalf = target.querySelector('.right-half');
-                        if (leftHalf) leftHalf.style.transform = "none";
-                        if (rightHalf) rightHalf.style.transform = "none";
-                        target.style.transform = "none";
-                        target.style.clipPath = "none";
-                        target.style.opacity = "1";
-                    }}, 1000);
-                    observer.unobserve(target);
-                }}
-            }});
-        }}, observerOptions);
-        document.querySelectorAll(".page-container[data-transition]").forEach(page => {{
-            observer.observe(page);
-        }});
-        
-        // AUTO-RECOVERY FAILSAFE: Ensures that if IntersectionObserver is not fired 
-        // within 1.5 seconds, all sections are forced to visible (eliminates white screen bugs)
-        setTimeout(() => {{
-            document.querySelectorAll(".page-container").forEach(page => {{
-                page.classList.add("is-visible");
-                page.style.opacity = "1";
-                page.style.transform = "none";
-                page.style.clipPath = "none";
-            }});
-        }}, 1500);
-    }});
-    </script>
 </body>
 </html>"""
             
@@ -808,7 +766,7 @@ def get_base_styles():
             color: #1e293b !important; border: 1px solid rgba(255, 255, 255, 0.3) !important; border-radius: 6px; font-weight: 600;
         }
 
-        /* ADVANCED TRANSITIONS */
+        /* ADVANCED TRANSITIONS FALLBACKS (MULTIPLE AND VERTICAL FLOW CONTROLS) */
         .page-container[data-transition] {
             transition: all var(--transition-speed, 0.9s) cubic-bezier(0.25, 1, 0.5, 1);
             will-change: transform, opacity, clip-path;
