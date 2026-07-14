@@ -495,7 +495,7 @@
             activeSpan = null;
         }
 
-        // Render dynamic customization sub-form inside the configurator window [1.1.4]
+        // Render dynamic customization sub-form inside the configurator window
         function showCustomTransitionOptions(effect) {
             const container = document.getElementById('transition-custom-options');
             container.innerHTML = '';
@@ -517,7 +517,7 @@
                     <div class="space-y-1">
                         <label class="block text-[9px] font-bold text-slate-400 uppercase">Card Stack Offset [2]</label>
                         <select id="trans-sticky-offset" class="w-full text-xs rounded border border-slate-200 py-1.5 px-2 bg-white select-box border">
-                            <option value="0px" selected>0px (Full Screen Cover)</option>
+                            <option value="0px" selected>0px (Full Screen Stacking)</option>
                             <option value="20px">20px (Partial Overlap)</option>
                             <option value="40px">40px (Staggered Overlap)</option>
                             <option value="60px">60px (Comfortable Stack)</option>
@@ -679,7 +679,7 @@
                         document.getElementById('trans-clip-origin').value = existing.origin || 'center';
                     } else if (effect === 'split-screen') {
                         document.getElementById('trans-split-direction').value = existing.split_direction || 'vertical';
-                    } else if (effect === 'horizontal-slide') {
+                    } else if (effect === 'horizontal-snap') {
                         document.getElementById('trans-slide-direction').value = existing.slide_direction || 'right-to-left';
                     } else if (effect === 'color-bleed') {
                         document.getElementById('trans-bleed-color').value = existing.bleed_color || 'indigo';
