@@ -867,7 +867,7 @@
             }
         });
 
-        // Phase 3: Post back stateless configurations and trigger file download
+        // Phase 3: Post back stateless configurations and trigger file download (WITH INTERACTIVE ERROR EXTRACTION)
         function triggerBuild() {
             const exportBtn = document.querySelector('#editor-actions button');
             exportBtn.disabled = true;
@@ -889,8 +889,16 @@
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(payload)
             })
-            .then(res => {
-                if (!res.ok) throw new Error("Compiler threw an error.");
+            .then(async res => {
+                if (!res.ok) {
+                    // Extract the custom error JSON sent by Python traceback catches
+                    try {
+                        const errorData = await res.json();
+                        throw new Error(errorData.error || "Server compilation crashed.");
+                    } catch (jsErr) {
+                        throw new Error(jsErr.message || "Compiler threw an unhandled server error.");
+                    }
+                }
                 return res.blob();
             })
             .then(blob => {
@@ -906,7 +914,7 @@
                 exportBtn.textContent = "Export Static Website";
             })
             .catch(err => {
-                alert("Compilation failed: " + err);
+                alert("Compilation failed: " + err.message);
                 exportBtn.disabled = false;
                 exportBtn.textContent = "Export Static Website";
             });
