@@ -3,6 +3,7 @@ import re
 import io
 import base64
 import zipfile
+import traceback
 from flask import Flask, request, render_template, redirect, url_for, flash, Response, jsonify
 import fitz  # PyMuPDF
 from PIL import Image
@@ -57,7 +58,7 @@ def get_page_filename(page_num, section_pages):
             return f"{section}.html"
     return f"page-{page_num}.html"
 
-# 3. Dynamic Form Field & Submit Overlays
+# 3. Dynamic Form Field & Submit Overlays from raw placeholders
 def generate_form_fields_layer(page, page_width, page_height):
     fields_html = []
     try:
@@ -72,7 +73,8 @@ def generate_form_fields_layer(page, page_width, page_height):
                             bbox = span["bbox"]
                             parts = text[7:-1].split(":")
                             if len(parts) >= 2:
-                                field_type, placeholder = parts[0], parts[1]
+                                field_type = parts[0]  # text, email, textarea, etc.
+                                placeholder = parts[1]
                                 field_name = placeholder.lower().replace(" ", "_")
                                 
                                 left = (bbox[0] / page_width) * 100
@@ -453,7 +455,7 @@ def get_base_styles():
 
 # ----------------- APP ROUTES -----------------
 
-# RESTORED INDEX HOME PATH ROUTE
+# INDEX HOME PAGE ROUTER
 @app.route('/')
 def home():
     return render_template('index.html')
@@ -503,7 +505,7 @@ def process_pdf():
                             spans.append({
                                 "text": span["text"],
                                 "bbox": span["bbox"],
-                                "font_size": span["bbox"][3] - span["bbox"][1] # Estimated font height
+                                "font_size": span["size"]  # Hydrate actual layout size
                             })
             
             # UNIFIED RUN: Process and attach all smart detected layers directly as custom_links
@@ -826,13 +828,24 @@ def compile_site():
                 
                 # Check for edited text overrides
                 display_text = l.get("edited_text", "").strip()
+                
+                # Dynamic failsafe types conversion of font_size mapping
+                f_size = l.get("font_size")
+                if f_size is None:
+                    f_size = 14
+                try:
+                    f_size = float(f_size)
+                except (TypeError, ValueError):
+                    f_size = 14
+                    
+                font_size_pct = (f_size / page_width) * 100
+                
                 if display_text:
                     mask_bg = l.get("bg_color", "#ffffff")
                     # Render solid backdrop block to hide original PDF text underneath
                     mask_html = f'<div style="position: absolute; left: {left_pct}%; top: {top_pct}%; width: {width_pct}%; height: {height_pct}%; background-color: {mask_bg}; z-index: 8;"></div>'
                     link_overlays.append(mask_html)
                     
-                    font_size_pct = (l.get("font_size", 14) / page_width) * 100
                     link_overlays.append(f"""
                         <a href="{href}" {target_attr} class="pdf-link {btn_class}" style="
                             position: absolute; left: {left_pct}%; top: {top_pct}%; width: {width_pct}%; height: {height_pct}%; 
@@ -939,48 +952,6 @@ def compile_site():
         {"".join(pages_body_html)}
     </main>
     {form_close}
-    
-    <script>
-    document.addEventListener("DOMContentLoaded", () => {{
-        const observerOptions = {{
-            root: null,
-            rootMargin: "0px",
-            threshold: 0.02
-        }};
-        const observer = new IntersectionObserver((entries, observer) => {{
-            entries.forEach(entry => {{
-                if (entry.isIntersecting) {{
-                    const target = entry.target;
-                    target.classList.add("is-visible");
-                    setTimeout(() => {{
-                        const leftHalf = target.querySelector('.left-half');
-                        const rightHalf = target.querySelector('.right-half');
-                        if (leftHalf) leftHalf.style.transform = "none";
-                        if (rightHalf) rightHalf.style.transform = "none";
-                        target.style.transform = "none";
-                        target.style.clipPath = "none";
-                        target.style.opacity = "1";
-                    }}, 1000);
-                    observer.unobserve(target);
-                }}
-            }});
-        }}, observerOptions);
-        document.querySelectorAll(".page-container[data-transition]").forEach(page => {{
-            observer.observe(page);
-        }});
-        
-        // AUTO-RECOVERY FAILSAFE: Ensures that if IntersectionObserver is not fired 
-        // within 1.5 seconds, all sections are forced to visible (eliminates white screen bugs)
-        setTimeout(() => {{
-            document.querySelectorAll(".page-container").forEach(page => {{
-                page.classList.add("is-visible");
-                page.style.opacity = "1";
-                page.style.transform = "none";
-                page.style.clipPath = "none";
-            }});
-        }}, 1500);
-    }});
-    </script>
 </body>
 </html>"""
             
@@ -1027,7 +998,10 @@ def compile_site():
                 headers={'Content-Disposition': f'attachment; filename="website_files.zip"'}
             )
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        # High fidelity traceback debugger logging
+        traceback_msg = traceback.format_exc()
+        print(traceback_msg)
+        return jsonify({"error": f"Compiler Error: {str(e)}"}), 500
 
 if __name__ == '__main__':
     app.run(debug=True, port=5000)
