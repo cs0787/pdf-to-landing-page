@@ -218,7 +218,6 @@ def get_base_styles():
         .pdf-link { 
             cursor: pointer; 
             text-decoration: none; 
-            border-radius: 6px;
             transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
             transform: translateY(0) scale(1);
         }
@@ -262,6 +261,8 @@ def get_base_styles():
         }
         .form-input:focus { border-color: #3b82f6; box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15); background: #ffffff; }
         .textarea-field { resize: none; }
+        
+        /* THE BUTTON STYLES SYSTEM */
         .form-submit-btn {
             background: #2563eb; color: white; border: none; border-radius: 6px;
             font-weight: 600; font-size: 14px; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
@@ -269,6 +270,23 @@ def get_base_styles():
         }
         .form-submit-btn:hover { background-color: #1d4ed8; transform: translateY(-2px); box-shadow: 0 10px 15px -3px rgba(37, 99, 235, 0.3), 0 4px 6px -2px rgba(37, 99, 235, 0.15); }
         .form-submit-btn:active { transform: translateY(0); box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1); }
+
+        .btn-style-filled {
+            background-color: var(--btn-color, #4f46e5); color: #ffffff !important; border: none; border-radius: 6px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.05); font-weight: 600; text-shadow: 0 1px 1px rgba(0,0,0,0.1);
+        }
+        .btn-style-outline {
+            background-color: transparent; color: var(--btn-color, #4f46e5) !important; border: 2px solid var(--btn-color, #4f46e5) !important;
+            border-radius: 6px; font-weight: 600;
+        }
+        .btn-style-underline {
+            background-color: transparent; color: var(--btn-color, #4f46e5) !important; border: none !important;
+            border-bottom: 2px solid var(--btn-color, #4f46e5) !important; border-radius: 0; font-weight: 600;
+        }
+        .btn-style-glass {
+            background-color: rgba(255, 255, 255, 0.15); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
+            color: #1e293b !important; border: 1px solid rgba(255, 255, 255, 0.3) !important; border-radius: 6px; font-weight: 600;
+        }
 
         /* ADVANCED TRANSITIONS CSS VARIABLE MAPPINGS [3] */
         .page-container[data-transition] {
@@ -391,7 +409,8 @@ def process_pdf():
                         for span in line["spans"]:
                             spans.append({
                                 "text": span["text"],
-                                "bbox": span["bbox"]  # [x0, y0, x1, y1]
+                                "bbox": span["bbox"],
+                                "font_size": span["bbox"][3] - span["bbox"][1] # Estimatated font height
                             })
             
             # UNIFIED RUN: Process and attach all smart detected layers directly as custom_links
@@ -415,7 +434,9 @@ def process_pdf():
                         "href": href,
                         "hover_effect": "glow",
                         "text": page.get_text("text", clip=rect).strip() or "Manual PDF Link",
-                        "target_blank": target_blank
+                        "target_blank": target_blank,
+                        "is_button": False,
+                        "font_size": rect.y1 - rect.y0
                     })
                     
             # B. Smart Text Utilities (URLs, Emails, Phones)
@@ -430,7 +451,9 @@ def process_pdf():
                         "href": item["href"],
                         "hover_effect": "glow",
                         "text": page.get_text("text", clip=rect).strip() or "Utility Link",
-                        "target_blank": item.get("target") == 'target="_blank"'
+                        "target_blank": item.get("target") == 'target="_blank"',
+                        "is_button": False,
+                        "font_size": rect.y1 - rect.y0
                     })
                     
             # C. Heuristic Button Intent Router (Contact Us, About, Home)
@@ -445,7 +468,9 @@ def process_pdf():
                         "href": btn["href"],
                         "hover_effect": "glow",
                         "text": page.get_text("text", clip=rect).strip() or "Intelligent Button",
-                        "target_blank": False
+                        "target_blank": False,
+                        "is_button": False,
+                        "font_size": rect.y1 - rect.y0
                     })
             
             pages_data.append({
@@ -649,7 +674,9 @@ def compile_site():
                 width_pct = ((bbox[2] - bbox[0]) / page_width) * 100
                 height_pct = ((bbox[3] - bbox[1]) / page_height) * 100
                 
-                hover_class = f'effect-{l.get("hover_effect", "glow")}'
+                is_btn = l.get("is_button", False)
+                btn_class = ""
+                btn_styles = []
                 
                 href = l["href"]
                 # Resolve scroll targets on multipage bundles
@@ -661,7 +688,45 @@ def compile_site():
                         pass
                 
                 target_attr = 'target="_blank"' if (not href.startswith("#") and not is_multipage_mode) else ''
-                link_overlays.append(f'<a href="{href}" {target_attr} class="pdf-link {hover_class}" style="position: absolute; left: {left_pct}%; top: {top_pct}%; width: {width_pct}%; height: {height_pct}%; z-index: 10;"></a>')
+                
+                if is_btn:
+                    style_type = l.get("btn_style", "filled")
+                    color_theme = l.get("btn_color", "indigo")
+                    hover_effect = l.get("hover_effect", "glow")
+                    btn_class = f"btn-style-{style_type} effect-{hover_effect}"
+                    
+                    colors_map = {
+                        "indigo": "#4f46e5",
+                        "emerald": "#059669",
+                        "rose": "#e11d48",
+                        "slate": "#1e293b",
+                        "orange": "#ea580c"
+                    }
+                    theme_color = colors_map.get(color_theme, "#4f46e5")
+                    btn_styles.append(f"--btn-color: {theme_color};")
+                else:
+                    hover_class = f'effect-{l.get("hover_effect", "glow")}'
+                    btn_class = hover_class
+                
+                btn_styles_str = " ".join(btn_styles)
+                
+                # Check for edited text overrides
+                display_text = l.get("edited_text", "").strip()
+                if display_text:
+                    mask_bg = l.get("bg_color", "#ffffff")
+                    # Render solid backdrop block to hide original PDF text underneath
+                    mask_html = f'<div style="position: absolute; left: {left_pct}%; top: {top_pct}%; width: {width_pct}%; height: {height_pct}%; background-color: {mask_bg}; z-index: 8;"></div>'
+                    link_overlays.append(mask_html)
+                    
+                    font_size_pct = (l.get("font_size", 14) / page_width) * 100
+                    link_overlays.append(f"""
+                        <a href="{href}" {target_attr} class="pdf-link {btn_class}" style="
+                            position: absolute; left: {left_pct}%; top: {top_pct}%; width: {width_pct}%; height: {height_pct}%; 
+                            z-index: 10; display: flex; align-items: center; justify-content: center; font-size: {font_size_pct}vw; {btn_styles_str}
+                        ">{display_text}</a>
+                    """)
+                else:
+                    link_overlays.append(f'<a href="{href}" {target_attr} class="pdf-link {btn_class}" style="position: absolute; left: {left_pct}%; top: {top_pct}%; width: {width_pct}%; height: {height_pct}%; z-index: 10; {btn_styles_str}"></a>')
             
             # Map standard placeholder inputs
             forms_layer_html = []
@@ -770,6 +835,17 @@ def compile_site():
         document.querySelectorAll(".page-container[data-transition]").forEach(page => {{
             observer.observe(page);
         }});
+        
+        // AUTO-RECOVERY FAILSAFE: Ensures that if IntersectionObserver is not fired 
+        // within 1.5 seconds, all sections are forced to visible (eliminates white screen bugs)
+        setTimeout(() => {{
+            document.querySelectorAll(".page-container").forEach(page => {{
+                page.classList.add("is-visible");
+                page.style.opacity = "1";
+                page.style.transform = "none";
+                page.style.clipPath = "none";
+            }});
+        }}, 1500);
     }});
     </script>
 </body>
