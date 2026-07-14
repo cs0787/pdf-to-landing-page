@@ -11,42 +11,10 @@ app = Flask(__name__)
 app.secret_key = 'pdf_converter_secret_key'
 app.config['MAX_CONTENT_LENGTH'] = 50 * 1024 * 1024  # Limit uploads to 50MB
 
-# Helper to check if two bounding boxes overlap
 def rects_overlap(r1, r2):
     return not (r1.x1 <= r2.x0 or r2.x1 <= r1.x0 or r1.y1 <= r2.y0 or r2.y1 <= r1.y0)
 
-# 1. Topic Scanner: Scores each page to locate matching website sections
-def index_document_sections(doc):
-    section_pages = {
-        "home": 1,
-        "about": 1,
-        "services": 1,
-        "pricing": 1,
-        "portfolio": 1,
-        "contact": len(doc),  # Default contact to the last page
-    }
-    scores = {key: [0] * len(doc) for key in ["about", "services", "pricing", "portfolio", "contact"]}
-    
-    for page_num in range(len(doc)):
-        page = doc[page_num]
-        text = page.get_text().lower()
-        
-        for key in scores.keys():
-            count = text.count(key)
-            if key == "about" and "about us" in text: count += 5
-            if key == "contact" and "contact us" in text: count += 5
-            if key == "services" and "our services" in text: count += 5
-            if key == "pricing" and "pricing plans" in text: count += 5
-            scores[key][page_num] = count
-            
-    for key, page_scores in scores.items():
-        max_score = max(page_scores)
-        if max_score > 0:
-            section_pages[key] = page_scores.index(max_score) + 1
-            
-    return section_pages
-
-# 2. Page Filename Resolver (For Multi-page zip export)
+# Helper to resolve the standard filename
 def get_page_filename(page_num, section_pages):
     if page_num == 1:
         return "index.html"
@@ -54,316 +22,6 @@ def get_page_filename(page_num, section_pages):
         if num == page_num and section != "home":
             return f"{section}.html"
     return f"page-{page_num}.html"
-
-# 3. Dynamic Form Field & Submit Overlays from raw placeholders
-def generate_form_fields_layer(page, page_width, page_height):
-    fields_html = []
-    try:
-        dict_data = page.get_text("dict")
-        for block in dict_data.get("blocks", []):
-            if "lines" in block:
-                for line in block["lines"]:
-                    for span in line["spans"]:
-                        text = span["text"].strip()
-                        
-                        if text.startswith("[input:") and text.endswith("]"):
-                            bbox = span["bbox"]
-                            parts = text[7:-1].split(":")
-                            if len(parts) >= 2:
-                                field_type = parts[0]  # text, email, textarea, etc.
-                                placeholder = parts[1]
-                                field_name = placeholder.lower().replace(" ", "_")
-                                
-                                left = (bbox[0] / page_width) * 100
-                                top = (bbox[1] / page_height) * 100
-                                width = ((bbox[2] - bbox[0]) / page_width) * 100
-                                height = ((bbox[3] - bbox[1]) / page_height) * 100
-                                
-                                if field_type == "textarea":
-                                    fields_html.append(f"""
-                                        <textarea name="{field_name}" placeholder="{placeholder}" required class="form-input textarea-field" style="
-                                            position: absolute; left: {left}%; top: {top}%; width: {width}%; height: {height}%; z-index: 15;
-                                        "></textarea>
-                                    """)
-                                else:
-                                    fields_html.append(f"""
-                                        <input type="{field_type}" name="{field_name}" placeholder="{placeholder}" required class="form-input input-field" style="
-                                            position: absolute; left: {left}%; top: {top}%; width: {width}%; height: {height}%; z-index: 15;
-                                        "/>
-                                    """)
-                        
-                        elif text.startswith("[submit:") and text.endswith("]"):
-                            bbox = span["bbox"]
-                            btn_text = text[8:-1]
-                            
-                            left = (bbox[0] / page_width) * 100
-                            top = (bbox[1] / page_height) * 100
-                            width = ((bbox[2] - bbox[0]) / page_width) * 100
-                            height = ((bbox[3] - bbox[1]) / page_height) * 100
-                            
-                            fields_html.append(f"""
-                                <button type="submit" class="form-submit-btn" style="
-                                    position: absolute; left: {left}%; top: {top}%; width: {width}%; height: {height}%; z-index: 15;
-                                ">{btn_text}</button>
-                            """)
-    except Exception:
-        pass
-    return "\n".join(fields_html)
-
-# 4. Extract Selectable & Searchable Transparent Text Layer [1]
-def generate_selectable_text_layer(page, page_width, page_height):
-    spans_html = []
-    try:
-        dict_data = page.get_text("dict")
-        for block in dict_data.get("blocks", []):
-            if "lines" in block:
-                for line in block["lines"]:
-                    for span in line["spans"]:
-                        text = span["text"]
-                        if text.strip().startswith("[input:") or text.strip().startswith("[submit:"):
-                            continue
-                            
-                        bbox = span["bbox"]
-                        left = (bbox[0] / page_width) * 100
-                        top = (bbox[1] / page_height) * 100
-                        width = ((bbox[2] - bbox[0]) / page_width) * 100
-                        height = ((bbox[3] - bbox[1]) / page_height) * 100
-                        font_size_pct = (span["size"] / page_width) * 100
-                        
-                        spans_html.append(f"""
-                            <span class="selectable-text" style="
-                                position: absolute; left: {left}%; top: {top}%; width: {width}%; height: {height}%;
-                                font-size: {font_size_pct}vw; line-height: 1; color: transparent; white-space: nowrap;
-                                transform-origin: left top; pointer-events: auto; user-select: text; -webkit-user-select: text;
-                            ">{text}</span>
-                        """)
-    except Exception:
-        pass
-    return "\n".join(spans_html)
-
-# 5. Extract Utility links (Raw URLs, Emails, Phones)
-def extract_utilities(page):
-    detected = []
-    text_content = page.get_text()
-    url_pattern = re.compile(r'^(https?://)?(www\.)?([a-zA-Z0-9\-]+\.)+[a-zA-Z]{2,6}(/[a-zA-Z0-9\-._~:/?#\[\]@!$&\'()*+,;=]*)?$', re.IGNORECASE)
-    email_pattern = re.compile(r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,6}$', re.IGNORECASE)
-    phone_pattern = re.compile(r'\b(?:\+?\d{1,3}[-.\s]?)?\(?\d{3}\)?[-.\s]?\d{3}[-.\s]?\d{4}\b')
-    
-    words = page.get_text("words")
-    for w in words:
-        x0, y0, x1, y1, text, _, _, _ = w
-        clean_text = text.strip().strip(",.()[]{}:;\"'!?*")
-        if len(clean_text) < 4: continue
-        
-        if url_pattern.match(clean_text) or clean_text.startswith("www.") or clean_text.startswith("http"):
-            href = clean_text if clean_text.startswith("http") else "https://" + clean_text
-            detected.append({"rect": fitz.Rect(x0, y0, x1, y1), "href": href, "target": 'target="_blank"'})
-        elif email_pattern.match(clean_text) or ("@" in clean_text and "." in clean_text):
-            detected.append({"rect": fitz.Rect(x0, y0, x1, y1), "href": f"mailto:{clean_text}", "target": ""})
-            
-    phones = phone_pattern.findall(text_content)
-    for num in set(phones):
-        rects = page.search_for(num)
-        for rect in rects:
-            detected.append({"rect": rect, "href": f"tel:{re.sub(r'[^\d+]', '', num)}", "target": ""})
-            
-    return detected
-
-# 6. Intent-to-Section Button Mapper
-def detect_smart_button_intents(page, section_pages, is_multipage):
-    detected = []
-    current_page = page.number + 1
-    intent_map = {
-        "home": "home", "welcome": "home", "back to top": "home",
-        "about us": "about", "about": "about", "who we are": "about", "our story": "about", "learn more": "about", "read more": "about",
-        "services": "services", "what we do": "services", "our services": "services", "features": "services", "shop now": "services", "shop": "services",
-        "pricing": "pricing", "plans": "pricing", "pricing plans": "pricing", "buy now": "pricing",
-        "portfolio": "portfolio", "our work": "portfolio", "projects": "portfolio",
-        "contact us": "contact", "contact": "contact", "get in touch": "contact", "email us": "contact", "get started": "contact", "register": "contact", "join now": "contact", "join": "contact", "apply now": "contact", "apply": "contact", "book now": "contact", "book a call": "contact", "subscribe": "contact", "download": "contact", "download now": "contact", "get templates": "contact"
-    }
-    
-    for phrase, target_section in intent_map.items():
-        target_page = section_pages.get(target_section)
-        if not target_page: continue
-        if current_page == target_page and current_page != 1: continue
-        
-        matches = page.search_for(phrase)
-        for rect in matches:
-            href = f"#{target_section}" if not is_multipage else get_page_filename(target_page, section_pages)
-            if not is_multipage and target_section == "home":
-                href = "#page-1"
-            elif not is_multipage:
-                href = f"#page-{target_page}"
-                
-            detected.append({"rect": rect, "href": href, "target": ""})
-            
-    socials = {"facebook": "https://facebook.com", "instagram": "https://instagram.com", "twitter": "https://twitter.com", "linkedin": "https://linkedin.com", "github": "https://github.com", "youtube": "https://youtube.com"}
-    for platform, url in socials.items():
-        matches = page.search_for(platform)
-        for rect in matches:
-            detected.append({"rect": rect, "href": url, "target": 'target="_blank"'})
-            
-    return detected
-
-# 7. Global CSS Configurations [2,3]
-def get_base_styles():
-    return """
-        html, body {
-            margin: 0; padding: 0; overflow-x: hidden; width: 100%; scroll-behavior: smooth; background-color: #ffffff;
-        }
-        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
-        .page-container { border-radius: 0; box-shadow: none; }
-        
-        /* HOVER EFFECTS FOR BUTTONS [2] */
-        .pdf-link { 
-            cursor: pointer; 
-            text-decoration: none; 
-            transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
-            transform: translateY(0) scale(1);
-        }
-        
-        /* 1. Glass Glow Effect */
-        .pdf-link.effect-glow:hover { 
-            background-color: rgba(255, 255, 255, 0.12); 
-            backdrop-filter: brightness(1.15) contrast(1.05) saturate(1.1); 
-            -webkit-backdrop-filter: brightness(1.15) contrast(1.05) saturate(1.1);
-            box-shadow: 0 4px 15px rgba(255, 255, 255, 0.1);
-            border-radius: 6px;
-        }
-        
-        /* 2. 3D Float Lift Effect */
-        .pdf-link.effect-lift:hover { 
-            transform: translateY(-3px) scale(1.02); 
-            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.12), 0 8px 10px -6px rgba(0, 0, 0, 0.12);
-            background-color: rgba(255, 255, 255, 0.08); 
-            border-radius: 6px;
-        }
-        
-        /* 3. Soft Pulse Effect */
-        .pdf-link.effect-pulse:hover { 
-            transform: scale(1.03);
-            background-color: rgba(255, 255, 255, 0.08); 
-            box-shadow: 0 0 10px rgba(59, 130, 246, 0.3);
-            border-radius: 6px;
-        }
-        
-        .pdf-link:active {
-            transform: translateY(0) scale(1);
-            box-shadow: none;
-        }
-        .selectable-text::selection { background-color: rgba(59, 130, 246, 0.25); color: transparent; }
-        .selectable-text::-webkit-selection { background-color: rgba(59, 130, 246, 0.25); color: transparent; }
-        
-        /* FORM COMPONENTS */
-        .form-input {
-            background: rgba(255, 255, 255, 0.85); border: 1px solid #cbd5e1; border-radius: 4px;
-            padding: 4px 12px; font-family: inherit; font-size: 14px; outline: none; transition: all 0.2s ease-in-out;
-        }
-        .form-input:focus { border-color: #3b82f6; box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15); background: #ffffff; }
-        .textarea-field { resize: none; }
-        
-        /* THE BUTTON STYLES SYSTEM */
-        .form-submit-btn {
-            background: #2563eb; color: white; border: none; border-radius: 6px;
-            font-weight: 600; font-size: 14px; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
-            transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1); cursor: pointer;
-        }
-        .form-submit-btn:hover { background-color: #1d4ed8; transform: translateY(-2px); box-shadow: 0 10px 15px -3px rgba(37, 99, 235, 0.3), 0 4px 6px -2px rgba(37, 99, 235, 0.15); }
-        .form-submit-btn:active { transform: translateY(0); box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1); }
-
-        .btn-style-filled {
-            background-color: var(--btn-color, #4f46e5); color: #ffffff !important; border: none; border-radius: 6px;
-            box-shadow: 0 4px 6px rgba(0,0,0,0.05); font-weight: 600; text-shadow: 0 1px 1px rgba(0,0,0,0.1);
-        }
-        .btn-style-outline {
-            background-color: transparent; color: var(--btn-color, #4f46e5) !important; border: 2px solid var(--btn-color, #4f46e5) !important;
-            border-radius: 6px; font-weight: 600;
-        }
-        .btn-style-underline {
-            background-color: transparent; color: var(--btn-color, #4f46e5) !important; border: none !important;
-            border-bottom: 2px solid var(--btn-color, #4f46e5) !important; border-radius: 0; font-weight: 600;
-        }
-        .btn-style-glass {
-            background-color: rgba(255, 255, 255, 0.15); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
-            color: #1e293b !important; border: 1px solid rgba(255, 255, 255, 0.3) !important; border-radius: 6px; font-weight: 600;
-        }
-
-        /* ADVANCED TRANSITIONS CSS VARIABLE MAPPINGS [3] */
-        .page-container[data-transition] {
-            transition: all var(--transition-speed, 0.9s) cubic-bezier(0.25, 1, 0.5, 1);
-            will-change: transform, opacity, clip-path;
-        }
-        
-        /* Disable parent container transition for split-screen to prevent double animation conflicts */
-        html.js-enabled .page-container[data-transition="split-screen"] {
-            opacity: 1 !important; transform: none !important; clip-path: none !important;
-        }
-        
-        /* Clip-Path Reveal */
-        html.js-enabled .page-container[data-transition="clip-reveal"] { 
-            clip-path: var(--start-clip, circle(0% at 50% 50%)); 
-        }
-        html.js-enabled .page-container[data-transition="clip-reveal"].is-visible { 
-            clip-path: var(--end-clip, circle(150% at 50% 50%)); 
-        }
-        
-        /* Vertical Split-Screen Columns */
-        html.js-enabled .page-container[data-transition="split-screen"] .left-half {
-            transform: var(--left-start, translateY(-80px)); opacity: 0;
-            transition: transform var(--transition-speed, 0.9s) cubic-bezier(0.25, 1, 0.5, 1), opacity var(--transition-speed, 0.9s) ease-out;
-        }
-        html.js-enabled .page-container[data-transition="split-screen"].is-visible .left-half { transform: translate(0) !important; opacity: 1; }
-        
-        html.js-enabled .page-container[data-transition="split-screen"] .right-half {
-            transform: var(--right-start, translateY(80px)); opacity: 0;
-            transition: transform var(--transition-speed, 0.9s) cubic-bezier(0.25, 1, 0.5, 1), opacity var(--transition-speed, 0.9s) ease-out;
-        }
-        html.js-enabled .page-container[data-transition="split-screen"].is-visible .right-half { transform: translate(0) !important; opacity: 1; }
-        
-        /* Horizontal Scroll Snap */
-        html.js-enabled .page-container[data-transition="horizontal-snap"] { 
-            clip-path: var(--start-clip, inset(0 0 0 100%)); 
-        }
-        html.js-enabled .page-container[data-transition="horizontal-snap"].is-visible { 
-            clip-path: var(--end-clip, inset(0 0 0 0)); 
-        }
-        html.js-enabled .page-container[data-transition="horizontal-snap"] img {
-            transform: var(--start-translate, translateX(60px));
-            transition: transform var(--transition-speed, 0.9s) cubic-bezier(0.25, 1, 0.5, 1);
-        }
-        html.js-enabled .page-container[data-transition="horizontal-snap"].is-visible img {
-            transform: translateX(0);
-        }
-
-        /* Standard scroll transitions */
-        html.js-enabled .page-container[data-transition="fade"] { opacity: 0; }
-        html.js-enabled .page-container[data-transition="fade"].is-visible { opacity: 1; }
-        
-        html.js-enabled .page-container[data-transition="slide-up"] { opacity: 0; transform: var(--start-translate, translateY(60px)); }
-        html.js-enabled .page-container[data-transition="slide-up"].is-visible { opacity: 1; transform: translateY(0); }
-        
-        html.js-enabled .page-container[data-transition="zoom-in"] { opacity: 0; transform: var(--start-translate, scale(0.93)); }
-        html.js-enabled .page-container[data-transition="zoom-in"].is-visible { opacity: 1; transform: scale(1); }
-        
-        html.js-enabled .page-container[data-transition="reveal"] { clip-path: var(--start-clip, inset(100% 0 0 0)); }
-        html.js-enabled .page-container[data-transition="reveal"].is-visible { clip-path: inset(0 0 0 0); }
-
-        /* Multi-page load animations */
-        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
-        @keyframes slideUpIn { from { opacity: 0; transform: translateY(50px); } to { opacity: 1; transform: translateY(0); } }
-        @keyframes zoomIn { from { opacity: 0; transform: scale(0.93); } to { opacity: 1; transform: scale(1); } }
-        @keyframes revealIn { from { clip-path: inset(100% 0 0 0); } to { clip-path: inset(0 0 0 0); } }
-        @keyframes clipRevealIn { from { clip-path: circle(0% at 50% 50%); } to { clip-path: circle(150% at 50% 50%); } }
-        @keyframes splitLeft { from { transform: translateY(-60px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
-        @keyframes splitRight { from { transform: translateY(60px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
-        @keyframes horizontalSnapIn { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
-    """
-
-# ----------------- APP ROUTES -----------------
-
-@app.route('/')
-def home():
-    return render_template('index.html')
 
 # Phase 1: Heavy rendering and span extraction
 @app.route('/process', methods=['POST'])
@@ -410,7 +68,7 @@ def process_pdf():
                             spans.append({
                                 "text": span["text"],
                                 "bbox": span["bbox"],
-                                "font_size": span["bbox"][3] - span["bbox"][1] # Estimatated font height
+                                "font_size": span["bbox"][3] - span["bbox"][1] # Estimated font height
                             })
             
             # UNIFIED RUN: Process and attach all smart detected layers directly as custom_links
@@ -543,96 +201,117 @@ def compile_site():
                 transition_effect = t_config
                 custom_opts = {}
 
-            speed = custom_opts.get("speed", "0.9s")
-            css_vars = [f"--transition-speed: {speed}"]
+            # Map custom CSS variables for scroll timelines
+            css_vars = []
+            effect_class = ""
+            bleed_bg_html = ""
+            mask_text_html = ""
             
-            transition_attr = f'data-transition="{transition_effect}"' if (transition_effect and not is_multipage_mode) else ''
-            
-            # Formulate entry load animations (multi-page separate documents)
-            animation_style = ""
-            left_animation = ""
-            right_animation = ""
-            
-            # Multi-page transition mappings
-            if is_multipage_mode and transition_effect:
-                if transition_effect == "fade":
-                    animation_style = "animation: fadeIn 0.7s ease-out forwards;"
-                elif transition_effect in ["slide-up", "sticky-cards"]:
-                    animation_style = "animation: slideUpIn 0.7s cubic-bezier(0.25, 1, 0.5, 1) forwards;"
-                elif transition_effect == "zoom-in":
-                    animation_style = "animation: zoomIn 0.7s cubic-bezier(0.25, 1, 0.5, 1) forwards;"
-                elif transition_effect == "reveal":
-                    animation_style = "animation: revealIn 0.7s cubic-bezier(0.25, 1, 0.5, 1) forwards;"
-                elif transition_effect == "clip-reveal":
-                    animation_style = "animation: clipRevealIn 0.9s cubic-bezier(0.25, 1, 0.5, 1) forwards;"
-                elif transition_effect == "split-screen":
-                    left_animation = "animation: splitLeft 0.8s cubic-bezier(0.25, 1, 0.5, 1) forwards;"
-                    right_animation = "animation: splitRight 0.8s cubic-bezier(0.25, 1, 0.5, 1) forwards;"
-                elif transition_effect == "horizontal-snap":
-                    animation_style = "animation: horizontalSnapIn 0.8s cubic-bezier(0.25, 1, 0.5, 1) forwards;"
-
-            # Compile CSS variables inline based on custom user-selections
-            if transition_effect == "clip-reveal":
-                shape = custom_opts.get("shape", "circle")
-                origin_str = custom_opts.get("origin", "center")
-                origin_coords = "50% 50%"
-                if origin_str == "top-left": origin_coords = "0% 0%"
-                elif origin_str == "bottom-right": origin_coords = "100% 100%"
+            if transition_effect == "sticky-cards":
+                effect_class = "effect-sticky-cards"
+                sticky_offset = custom_opts.get("offset", "0px")
+                css_vars.append(f"--sticky-offset: {sticky_offset}")
                 
-                if shape == "circle":
-                    css_vars.append(f"--start-clip: circle(0% at {origin_coords})")
-                    css_vars.append(f"--end-clip: circle(150% at {origin_coords})")
-                elif shape == "rectangle":
-                    css_vars.append(f"--start-clip: inset(50% 50% 50% 50%)")
-                    css_vars.append(f"--end-clip: inset(0% 0% 0% 0%)")
-                elif shape == "diamond":
-                    css_vars.append(f"--start-clip: polygon(50% 50%, 50% 50%, 50% 50%, 50% 50%)")
-                    css_vars.append(f"--end-clip: polygon(50% 0%, 100% 50%, 50% 100%, 0% 50%)")
-                    
+            elif transition_effect == "parallax-zoom":
+                effect_class = "parallax-section"
+                zoom_scale = custom_opts.get("zoom_scale", "1.2")
+                zoom_translate = custom_opts.get("zoom_translate", "5%")
+                css_vars.append(f"--zoom-scale: {zoom_scale}")
+                css_vars.append(f"--zoom-translate: {zoom_translate}")
+                
             elif transition_effect == "split-screen":
-                split_dir = custom_opts.get("split_direction", "vertical")
-                if split_dir == "vertical":
-                    css_vars.append("--left-start: translateY(-80px)")
-                    css_vars.append("--right-start: translateY(80px)")
+                effect_class = "split-section"
+                split_direction = custom_opts.get("split_direction", "vertical")
+                if split_direction == "vertical":
+                    css_vars.append("--split-start: translateY(40%)")
                 else:
-                    css_vars.append("--left-start: translateX(-80px)")
-                    css_vars.append("--right-start: translateX(80px)")
+                    css_vars.append("--split-start: translateX(40%)")
                     
-            elif transition_effect == "horizontal-snap":
+            elif transition_effect == "curtain-reveal":
+                effect_class = "curtain-section"
+                curtain_shape = custom_opts.get("shape", "circle")
+                if curtain_shape == "circle":
+                    css_vars.append("--curtain-start: circle(0% at 50% 50%)")
+                elif curtain_shape == "rectangle":
+                    css_vars.append("--curtain-start: inset(50% 50% 50% 50%)")
+                elif curtain_shape == "diamond":
+                    css_vars.append("--curtain-start: polygon(50% 50%, 50% 50%, 50% 50%, 50% 50%)")
+                    
+            elif transition_effect == "horizontal-slide":
+                effect_class = "horizontal-section"
                 slide_dir = custom_opts.get("slide_direction", "right-to-left")
                 if slide_dir == "right-to-left":
-                    css_vars.append("--start-clip: inset(0 0 0 100%)")
-                    css_vars.append("--end-clip: inset(0 0 0 0)")
-                    css_vars.append("--start-translate: translateX(60px)")
+                    css_vars.append("--slide-start: translateX(100%)")
                 else:
-                    css_vars.append("--start-clip: inset(0 100% 0 0)")
-                    css_vars.append("--end-clip: inset(0 0 0 0)")
-                    css_vars.append("--start-translate: translateX(-60px)")
+                    css_vars.append("--slide-start: translateX(-100%)")
                     
-            elif transition_effect == "reveal":
-                wipe_dir = custom_opts.get("wipe_direction", "bottom-to-top")
-                if wipe_dir == "bottom-to-top":
-                    css_vars.append("--start-clip: inset(100% 0 0 0)")
+            elif transition_effect == "color-bleed":
+                effect_class = "bleed-section"
+                color_theme = custom_opts.get("bleed_color", "indigo")
+                blur_amount = custom_opts.get("bleed_blur", "20px")
+                
+                colors_map = {
+                    "indigo": "#4f46e5",
+                    "emerald": "#059669",
+                    "rose": "#e11d48",
+                    "slate": "#1e293b",
+                    "orange": "#ea580c"
+                }
+                theme_color = colors_map.get(color_theme, "#ff3366")
+                css_vars.append(f"--bleed-color: {theme_color}")
+                css_vars.append(f"--bleed-blur: {blur_amount}")
+                bleed_bg_html = '<div class="bleed-bg"></div>'
+                
+            elif transition_effect == "cube-rotation":
+                effect_class = "cube-section"
+                cube_persp = custom_opts.get("perspective", "1000px")
+                cube_dir = custom_opts.get("cube_direction", "down")
+                css_vars.append(f"--cube-perspective: {cube_persp}")
+                if cube_dir == "down":
+                    css_vars.append("--cube-start: rotateX(-45deg) translateZ(-30vh)")
                 else:
-                    css_vars.append("--start-clip: inset(0 0 100% 0)")
+                    css_vars.append("--cube-start: rotateX(45deg) translateZ(-30vh)")
                     
+            elif transition_effect == "text-mask-reveal":
+                effect_class = "mask-section"
+                mask_title = custom_opts.get("mask_title", "DISCOVER").upper()
+                mask_scale = custom_opts.get("mask_scale", "15")
+                css_vars.append(f"--mask-scale: {mask_scale}")
+                mask_text_html = f"""
+                <div class="mask-text-element" style="position: absolute; z-index: 20; color: #1e293b; font-weight: 900; font-family: -apple-system, sans-serif; letter-spacing: -2px;">
+                    {mask_title}
+                </div>
+                """
+            
+            # Map standard scroll transitions
+            elif transition_effect == "fade":
+                effect_class = "effect-fade"
             elif transition_effect == "slide-up":
+                effect_class = "effect-slide-up"
                 css_vars.append("--start-translate: translateY(60px)")
             elif transition_effect == "zoom-in":
+                effect_class = "effect-zoom-in"
                 css_vars.append("--start-translate: scale(0.93)")
+            elif transition_effect == "reveal":
+                effect_class = "effect-reveal"
+                css_vars.append("--start-clip: inset(100% 0 0 0)")
 
-            # Handle Vertical Split-screen (Clipped Columns)
+            speed = custom_opts.get("speed", "0.9s")
+            css_vars.append(f"--transition-speed: {speed}")
+            css_variables_style = "; ".join(css_vars)
+            
+            # Apply Vertical Split-screen (Clipped Columns)
             if transition_effect == "split-screen":
                 img_elements = f"""
-                <div class="left-half" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; overflow: hidden; clip-path: inset(0 50% 0 0); {left_animation}">
-                    <img src="{img_base64}" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; display: block;" alt="Page {p_num} Left" />
+                <div class="left-half" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; overflow: hidden; clip-path: inset(0 50% 0 0);">
+                    <img src="{img_base64}" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; display: block; object-fit: contain;" alt="Page {p_num} Left" />
                 </div>
-                <div class="right-half" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; overflow: hidden; clip-path: inset(0 0 0 50%); {right_animation}">
-                    <img src="{img_base64}" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; display: block;" alt="Page {p_num} Right" />
+                <div class="right-half" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; overflow: hidden; clip-path: inset(0 0 0 50%);">
+                    <img src="{img_base64}" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; display: block; object-fit: contain;" alt="Page {p_num} Right" />
                 </div>
                 """
             else:
-                img_elements = f'<img src="{img_base64}" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; display: block;" alt="Page {p_num}" />'
+                img_elements = f'<img src="{img_base64}" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; display: block; object-fit: contain;" alt="Page {p_num}" />'
 
             # STICKY STACKING CARDS INTEGRATION ENGINE [2]
             sticky_style = ""
@@ -661,8 +340,8 @@ def compile_site():
                 sticky_style = f"position: sticky; top: {sticky_offset}; z-index: {p_num}; box-shadow: 0 10px 30px rgba(0,0,0,0.06);"
 
             # Add CSS variables styles block to the wrapper
-            css_variables_style = "; ".join(css_vars)
-            container_style = f"position: relative; width: 100%; max-width: {page_width}px; margin: 0 auto; background: #ffffff; z-index: {p_num}; {sticky_style} {animation_style}; {css_variables_style}"
+            container_style = f"position: relative; width: 100%; max-width: {page_width}px; height: 100%; max-height: 100%; margin: 0 auto; background: transparent; z-index: {p_num};"
+            animation_style = ""
 
             # Map absolute hyperlinks and customized hover states [2]
             link_overlays = []
@@ -770,17 +449,36 @@ def compile_site():
                 font_size_pct = (s.get("size", 12) / page_width) * 100
                 selectable_spans.append(f'<span class="selectable-text" style="position: absolute; left: {left}%; top: {top}%; width: {width}%; height: {height}%; font-size: {font_size_pct}vw; line-height:1; color:transparent; white-space:nowrap; transform-origin: left top; pointer-events:auto; user-select:text; -webkit-user-select:text;">{text}</span>')
 
-            return f"""
-            <div id="page-{p_num}" class="page-container" {transition_attr} style="{container_style}">
-                <div style="padding-top: {aspect_ratio}%;"></div>
-                {img_elements}
-                <div class="interactive-overlay" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%;">
-                    {"".join(link_overlays)}
-                    {"\n".join(forms_layer_html)}
-                    {"\n".join(selectable_spans)}
+            # Render page content wrapped inside the uniform section block if single page mode
+            if not is_multipage_mode:
+                return f"""
+                <section class="section-wrapper {effect_class}" style="{css_variables_style}; z-index: {p_num};">
+                    {bleed_bg_html}
+                    {mask_text_html}
+                    <div id="page-{p_num}" class="page-container" {transition_attr} style="{container_style}">
+                        <div style="padding-top: {aspect_ratio}%;"></div>
+                        {img_elements}
+                        <div class="interactive-overlay" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%;">
+                            {"".join(link_overlays)}
+                            {"\n".join(forms_layer_html)}
+                            {"\n".join(selectable_spans)}
+                        </div>
+                    </div>
+                </section>
+                """
+            else:
+                # Multi-page layout
+                return f"""
+                <div id="page-{p_num}" class="page-container" style="position: relative; width: 100%; max-width: {page_width}px; margin: 0 auto; background: #ffffff; {animation_style}">
+                    <div style="padding-top: {aspect_ratio}%;"></div>
+                    {img_elements}
+                    <div class="interactive-overlay" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%;">
+                        {"".join(link_overlays)}
+                        {"\n".join(forms_layer_html)}
+                        {"\n".join(selectable_spans)}
+                    </div>
                 </div>
-            </div>
-            """
+                """
         
         # EXPORT OPTION A: Single Page Compiled Output
         if layout_mode == 'single':
@@ -895,6 +593,250 @@ def compile_site():
             )
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
+def get_base_styles():
+    return """
+        /* GLOBAL SETUP: SMOOTH SCROLL & SNAP */
+        html {
+            scroll-behavior: smooth;
+            scroll-snap-type: y mandatory; /* Snaps vertically */
+            overflow-y: scroll;
+            height: 100%;
+        }
+        body {
+            margin: 0; padding: 0; width: 100%; height: 100%;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            overflow-x: hidden;
+        }
+        
+        .section-wrapper {
+            height: 100vh;
+            width: 100vw;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            scroll-snap-align: start; /* Locks section to top */
+            position: relative;
+            overflow: hidden;
+            background-color: #ffffff;
+        }
+        
+        /* 1. CARD STACKING EFFECT [2] */
+        .section-wrapper.effect-sticky-cards {
+            position: sticky;
+            top: var(--sticky-offset, 0px);
+            box-shadow: 0 -15px 35px rgba(0,0,0,0.08);
+        }
+        
+        /* 2. PARALLAX BACKGROUND ZOOM */
+        .section-wrapper.parallax-section {
+            view-timeline-name: --zoom;
+        }
+        .section-wrapper.parallax-section img {
+            animation: zoom-in linear both;
+            animation-timeline: --zoom;
+            animation-range: entry 0% exit 100%;
+            transform-origin: center center;
+        }
+        @keyframes zoom-in {
+            from { transform: scale(1) translateY(0); }
+            to { transform: scale(var(--zoom-scale, 1.2)) translateY(var(--zoom-translate, 5%)); }
+        }
+        
+        /* 3. SPLIT SCREEN SLIDE */
+        .section-wrapper.split-section {
+            view-timeline-name: --split;
+        }
+        .section-wrapper.split-section .left-half,
+        .section-wrapper.split-section .right-half {
+            animation: split-move linear both;
+            animation-timeline: --split;
+            animation-range: entry 0% cover 100%;
+        }
+        @keyframes split-move {
+            from { transform: var(--split-start, translateY(40%)); }
+            to { transform: translateY(0); }
+        }
+        
+        /* 4. CINEMATIC CURTAIN REVEAL */
+        .section-wrapper.curtain-section {
+            view-timeline-name: --curtain;
+        }
+        .section-wrapper.curtain-section .page-container {
+            animation: curtain-open linear both;
+            animation-timeline: --curtain;
+            animation-range: entry 0% entry 100%;
+        }
+        @keyframes curtain-open {
+            from { clip-path: var(--curtain-start, inset(0 50% 0 50%)); }
+            to { clip-path: inset(0 0% 0 0%); }
+        }
+        
+        /* 5. HORIZONTAL SECTION SLIDE */
+        .section-wrapper.horizontal-section {
+            view-timeline-name: --horizontal;
+        }
+        .section-wrapper.horizontal-section .page-container {
+            animation: slide-left linear both;
+            animation-timeline: --horizontal;
+            animation-range: entry 0% entry 100%;
+        }
+        @keyframes slide-left {
+            from { transform: var(--slide-start, translateX(100%)); }
+            to { transform: translateX(0); }
+        }
+        
+        /* 6. DYNAMIC COLOR BLEED */
+        .section-wrapper.bleed-section {
+            view-timeline-name: --bleed;
+        }
+        .section-wrapper.bleed-section .bleed-bg {
+            position: absolute;
+            inset: 0;
+            z-index: 1;
+            animation: color-fade linear both;
+            animation-timeline: --bleed;
+            animation-range: entry 0% exit 50%;
+        }
+        @keyframes color-fade {
+            from { background-color: #ffffff; filter: blur(var(--bleed-blur, 20px)); opacity: 0; }
+            to { background-color: var(--bleed-color, #ff3366); filter: blur(0); opacity: 1; }
+        }
+        
+        /* 7. 3D CUBE ROTATION */
+        .cube-container {
+            perspective: var(--cube-perspective, 1000px);
+        }
+        .section-wrapper.cube-section {
+            view-timeline-name: --cube;
+            transform-style: preserve-3d;
+            animation: cube-rotate linear both;
+            animation-timeline: --cube;
+            animation-range: entry 0% exit 100%;
+        }
+        @keyframes cube-rotate {
+            from { transform: var(--cube-start, rotateX(-45deg) translateZ(-30vh)); opacity: 0.3; }
+            to { transform: rotateX(0deg) translateZ(0); opacity: 1; }
+        }
+        
+        /* 8. TEXT MASK REVEAL */
+        .section-wrapper.mask-section {
+            view-timeline-name: --mask;
+        }
+        .section-wrapper.mask-section .mask-text-element {
+            animation: text-grow linear both;
+            animation-timeline: --mask;
+            animation-range: entry 0% exit 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            width: 100%;
+            pointer-events: none;
+        }
+        @keyframes text-grow {
+            from { transform: scale(1); opacity: 0; }
+            to { transform: scale(var(--mask-scale, 15)); opacity: 1; }
+        }
+
+        /* BUTTON HOVER CODES [2] */
+        .pdf-link { 
+            cursor: pointer; 
+            text-decoration: none; 
+            transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+            transform: translateY(0) scale(1);
+        }
+        .pdf-link.effect-glow:hover { 
+            background-color: rgba(255, 255, 255, 0.12); 
+            backdrop-filter: brightness(1.15) contrast(1.05) saturate(1.1); 
+            -webkit-backdrop-filter: brightness(1.15) contrast(1.05) saturate(1.1);
+            box-shadow: 0 4px 15px rgba(255, 255, 255, 0.1);
+            border-radius: 6px;
+        }
+        .pdf-link.effect-lift:hover { 
+            transform: translateY(-3px) scale(1.02); 
+            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.12), 0 8px 10px -6px rgba(0, 0, 0, 0.12);
+            background-color: rgba(255, 255, 255, 0.08); 
+            border-radius: 6px;
+        }
+        .pdf-link.effect-pulse:hover { 
+            transform: scale(1.03);
+            background-color: rgba(255, 255, 255, 0.08); 
+            box-shadow: 0 0 10px rgba(59, 130, 246, 0.3);
+            border-radius: 6px;
+        }
+        .pdf-link:active {
+            transform: translateY(0) scale(1);
+            box-shadow: none;
+        }
+        .selectable-text::selection { background-color: rgba(59, 130, 246, 0.25); color: transparent; }
+        .selectable-text::-webkit-selection { background-color: rgba(59, 130, 246, 0.25); color: transparent; }
+        
+        /* FORM COMPONENTS */
+        .form-input {
+            background: rgba(255, 255, 255, 0.85); border: 1px solid #cbd5e1; border-radius: 4px;
+            padding: 4px 12px; font-family: inherit; font-size: 14px; outline: none; transition: all 0.2s ease-in-out;
+        }
+        .form-input:focus { border-color: #3b82f6; box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15); background: #ffffff; }
+        .textarea-field { resize: none; }
+        .form-submit-btn {
+            background: #2563eb; color: white; border: none; border-radius: 6px;
+            font-weight: 600; font-size: 14px; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+            transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1); cursor: pointer;
+        }
+        .form-submit-btn:hover { background-color: #1d4ed8; transform: translateY(-2px); box-shadow: 0 10px 15px -3px rgba(37, 99, 235, 0.3), 0 4px 6px -2px rgba(37, 99, 235, 0.15); }
+        .form-submit-btn:active { transform: translateY(0); box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1); }
+
+        /* BUTTON STYLE TYPES */
+        .btn-style-filled {
+            background-color: var(--btn-color, #4f46e5); color: #ffffff !important; border: none; border-radius: 6px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.05); font-weight: 600; text-shadow: 0 1px 1px rgba(0,0,0,0.1);
+        }
+        .btn-style-outline {
+            background-color: transparent; color: var(--btn-color, #4f46e5) !important; border: 2px solid var(--btn-color, #4f46e5) !important;
+            border-radius: 6px; font-weight: 600;
+        }
+        .btn-style-underline {
+            background-color: transparent; color: var(--btn-color, #4f46e5) !important; border: none !important;
+            border-bottom: 2px solid var(--btn-color, #4f46e5) !important; border-radius: 0; font-weight: 600;
+        }
+        .btn-style-glass {
+            background-color: rgba(255, 255, 255, 0.15); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
+            color: #1e293b !important; border: 1px solid rgba(255, 255, 255, 0.3) !important; border-radius: 6px; font-weight: 600;
+        }
+
+        /* ADVANCED TRANSITIONS */
+        .page-container[data-transition] {
+            transition: all var(--transition-speed, 0.9s) cubic-bezier(0.25, 1, 0.5, 1);
+            will-change: transform, opacity, clip-path;
+        }
+        html.js-enabled .page-container[data-transition="split-screen"] {
+            opacity: 1 !important; transform: none !important; clip-path: none !important;
+        }
+
+        /* Standard scroll transitions fallback layout */
+        html.js-enabled .page-container[data-transition="fade"] { opacity: 0; }
+        html.js-enabled .page-container[data-transition="fade"].is-visible { opacity: 1; }
+        
+        html.js-enabled .page-container[data-transition="slide-up"] { opacity: 0; transform: var(--start-translate, translateY(60px)); }
+        html.js-enabled .page-container[data-transition="slide-up"].is-visible { opacity: 1; transform: translateY(0); }
+        
+        html.js-enabled .page-container[data-transition="zoom-in"] { opacity: 0; transform: var(--start-translate, scale(0.93)); }
+        html.js-enabled .page-container[data-transition="zoom-in"].is-visible { opacity: 1; transform: scale(1); }
+        
+        html.js-enabled .page-container[data-transition="reveal"] { clip-path: var(--start-clip, inset(100% 0 0 0)); }
+        html.js-enabled .page-container[data-transition="reveal"].is-visible { clip-path: inset(0 0 0 0); }
+
+        /* Multi-page load animations */
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+        @keyframes slideUpIn { from { opacity: 0; transform: translateY(50px); } to { opacity: 1; transform: translateY(0); } }
+        @keyframes zoomIn { from { opacity: 0; transform: scale(0.93); } to { opacity: 1; transform: scale(1); } }
+        @keyframes revealIn { from { clip-path: inset(100% 0 0 0); } to { clip-path: inset(0 0 0 0); } }
+        @keyframes clipRevealIn { from { clip-path: circle(0% at 50% 50%); } to { clip-path: circle(150% at 50% 50%); } }
+        @keyframes splitLeft { from { transform: translateY(-60px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+        @keyframes splitRight { from { transform: translateY(60px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+        @keyframes horizontalSnapIn { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+    """
 
 if __name__ == '__main__':
     app.run(debug=True, port=5000)
