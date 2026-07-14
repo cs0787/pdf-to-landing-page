@@ -58,7 +58,7 @@ def get_page_filename(page_num, section_pages):
             return f"{section}.html"
     return f"page-{page_num}.html"
 
-# 3. Dynamic Form Field & Submit Overlays from raw placeholders
+# 3. Dynamic Form Field & Submit Overlays
 def generate_form_fields_layer(page, page_width, page_height):
     fields_html = []
     try:
@@ -73,8 +73,7 @@ def generate_form_fields_layer(page, page_width, page_height):
                             bbox = span["bbox"]
                             parts = text[7:-1].split(":")
                             if len(parts) >= 2:
-                                field_type = parts[0]  # text, email, textarea, etc.
-                                placeholder = parts[1]
+                                field_type, placeholder = parts[0], parts[1]
                                 field_name = placeholder.lower().replace(" ", "_")
                                 
                                 left = (bbox[0] / page_width) * 100
@@ -224,7 +223,7 @@ def get_base_styles():
             overflow-x: hidden;
         }
         
-        .section-wrapper {
+        section {
             height: 100vh;
             width: 100vw;
             display: flex;
@@ -237,19 +236,16 @@ def get_base_styles():
         }
         
         /* 1. CARD STACKING EFFECT [2] */
-        .section-wrapper.effect-sticky-cards {
+        section.effect-sticky-cards {
             position: sticky;
             top: var(--sticky-offset, 0px);
             box-shadow: 0 -15px 35px rgba(0,0,0,0.08);
         }
         
-        /* 2. PARALLAX BACKGROUND ZOOM */
-        .section-wrapper.parallax-section {
-            view-timeline-name: --zoom;
-        }
-        .section-wrapper.parallax-section img {
+        /* 2. PARALLAX BACKGROUND ZOOM [1.1.4] */
+        section.parallax-section img {
             animation: zoom-in linear both;
-            animation-timeline: --zoom;
+            animation-timeline: view();
             animation-range: entry 0% exit 100%;
             transform-origin: center center;
         }
@@ -258,14 +254,11 @@ def get_base_styles():
             to { transform: scale(var(--zoom-scale, 1.2)) translateY(var(--zoom-translate, 5%)); }
         }
         
-        /* 3. SPLIT SCREEN SLIDE */
-        .section-wrapper.split-section {
-            view-timeline-name: --split;
-        }
-        .section-wrapper.split-section .left-half,
-        .section-wrapper.split-section .right-half {
+        /* 3. SPLIT SCREEN SLIDE [1.1.4] */
+        section.split-section .left-half,
+        section.split-section .right-half {
             animation: split-move linear both;
-            animation-timeline: --split;
+            animation-timeline: view();
             animation-range: entry 0% cover 100%;
         }
         @keyframes split-move {
@@ -273,13 +266,10 @@ def get_base_styles():
             to { transform: translateY(0); }
         }
         
-        /* 4. CINEMATIC CURTAIN REVEAL */
-        .section-wrapper.curtain-section {
-            view-timeline-name: --curtain;
-        }
-        .section-wrapper.curtain-section .page-container {
+        /* 4. CINEMATIC CURTAIN REVEAL [1.1.4] */
+        section.curtain-section .page-container {
             animation: curtain-open linear both;
-            animation-timeline: --curtain;
+            animation-timeline: view();
             animation-range: entry 0% entry 100%;
         }
         @keyframes curtain-open {
@@ -287,13 +277,10 @@ def get_base_styles():
             to { clip-path: inset(0 0% 0 0%); }
         }
         
-        /* 5. HORIZONTAL SECTION SLIDE */
-        .section-wrapper.horizontal-section {
-            view-timeline-name: --horizontal;
-        }
-        .section-wrapper.horizontal-section .page-container {
+        /* 5. HORIZONTAL SECTION SLIDE [1.1.4] */
+        section.horizontal-section .page-container {
             animation: slide-left linear both;
-            animation-timeline: --horizontal;
+            animation-timeline: view();
             animation-range: entry 0% entry 100%;
         }
         @keyframes slide-left {
@@ -301,16 +288,13 @@ def get_base_styles():
             to { transform: translateX(0); }
         }
         
-        /* 6. DYNAMIC COLOR BLEED */
-        .section-wrapper.bleed-section {
-            view-timeline-name: --bleed;
-        }
-        .section-wrapper.bleed-section .bleed-bg {
+        /* 6. DYNAMIC COLOR BLEED [1.1.4] */
+        section.bleed-section .bleed-bg {
             position: absolute;
             inset: 0;
             z-index: 1;
             animation: color-fade linear both;
-            animation-timeline: --bleed;
+            animation-timeline: view();
             animation-range: entry 0% exit 50%;
         }
         @keyframes color-fade {
@@ -318,15 +302,14 @@ def get_base_styles():
             to { background-color: var(--bleed-color, #ff3366); filter: blur(0); opacity: 1; }
         }
         
-        /* 7. 3D CUBE ROTATION */
-        .cube-container {
+        /* 7. 3D CUBE ROTATION [1.1.4] */
+        section.cube-section {
             perspective: var(--cube-perspective, 1000px);
         }
-        .section-wrapper.cube-section {
-            view-timeline-name: --cube;
+        section.cube-section .page-container {
             transform-style: preserve-3d;
             animation: cube-rotate linear both;
-            animation-timeline: --cube;
+            animation-timeline: view();
             animation-range: entry 0% exit 100%;
         }
         @keyframes cube-rotate {
@@ -334,13 +317,10 @@ def get_base_styles():
             to { transform: rotateX(0deg) translateZ(0); opacity: 1; }
         }
         
-        /* 8. TEXT MASK REVEAL */
-        .section-wrapper.mask-section {
-            view-timeline-name: --mask;
-        }
-        .section-wrapper.mask-section .mask-text-element {
+        /* 8. TEXT MASK REVEAL [1.1.4] */
+        section.mask-section .mask-text-element {
             animation: text-grow linear both;
-            animation-timeline: --mask;
+            animation-timeline: view();
             animation-range: entry 0% exit 100%;
             display: flex;
             align-items: center;
@@ -644,6 +624,9 @@ def compile_site():
             bleed_bg_html = ""
             mask_text_html = ""
             
+            # UPGRADED: Explicitly declare the transition attribute state variable
+            transition_attr = f'data-transition="{transition_effect}"' if (transition_effect and not is_multipage_mode) else ''
+            
             if transition_effect == "sticky-cards":
                 effect_class = "effect-sticky-cards"
                 sticky_offset = custom_opts.get("offset", "0px")
@@ -694,7 +677,7 @@ def compile_site():
                     "slate": "#1e293b",
                     "orange": "#ea580c"
                 }
-                theme_color = colors_map.get(color_theme, "#ff3366")
+                theme_color = colors_map.get(color_theme, "#4f46e5")
                 css_vars.append(f"--bleed-color: {theme_color}")
                 css_vars.append(f"--bleed-blur: {blur_amount}")
                 bleed_bg_html = '<div class="bleed-bg"></div>'
@@ -754,6 +737,7 @@ def compile_site():
             sticky_style = ""
             is_sticky = False
             sticky_offset = "0px"
+            animation_style = ""
             
             # Case 1: The next page transitions using sticky cards (this page must stick as the base)
             next_page_num = p_num + 1
@@ -778,7 +762,6 @@ def compile_site():
 
             # Add CSS variables styles block to the wrapper
             container_style = f"position: relative; width: 100%; max-width: {page_width}px; height: 100%; max-height: 100%; margin: 0 auto; background: transparent; z-index: {p_num};"
-            animation_style = ""
 
             # Map absolute hyperlinks and customized hover states [2]
             link_overlays = []
@@ -952,6 +935,48 @@ def compile_site():
         {"".join(pages_body_html)}
     </main>
     {form_close}
+    
+    <script>
+    document.addEventListener("DOMContentLoaded", () => {{
+        const observerOptions = {{
+            root: null,
+            rootMargin: "0px",
+            threshold: 0.02
+        }};
+        const observer = new IntersectionObserver((entries, observer) => {{
+            entries.forEach(entry => {{
+                if (entry.isIntersecting) {{
+                    const target = entry.target;
+                    target.classList.add("is-visible");
+                    setTimeout(() => {{
+                        const leftHalf = target.querySelector('.left-half');
+                        const rightHalf = target.querySelector('.right-half');
+                        if (leftHalf) leftHalf.style.transform = "none";
+                        if (rightHalf) rightHalf.style.transform = "none";
+                        target.style.transform = "none";
+                        target.style.clipPath = "none";
+                        target.style.opacity = "1";
+                    }}, 1000);
+                    observer.unobserve(target);
+                }}
+            }});
+        }}, observerOptions);
+        document.querySelectorAll(".page-container[data-transition]").forEach(page => {{
+            observer.observe(page);
+        }});
+        
+        // AUTO-RECOVERY FAILSAFE: Ensures that if IntersectionObserver is not fired 
+        // within 1.5 seconds, all sections are forced to visible (eliminates white screen bugs)
+        setTimeout(() => {{
+            document.querySelectorAll(".page-container").forEach(page => {{
+                page.classList.add("is-visible");
+                page.style.opacity = "1";
+                page.style.transform = "none";
+                page.style.clipPath = "none";
+            }});
+        }}, 1500);
+    }});
+    </script>
 </body>
 </html>"""
             
