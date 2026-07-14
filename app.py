@@ -7,7 +7,10 @@ from flask import Flask, request, render_template, redirect, url_for, flash, Res
 import fitz  # PyMuPDF
 from PIL import Image
 
-app = Flask(__name__)
+# EXPLICIT TEMPLATE PATH RESOLUTION FOR VERCEL SERVERLESS ENVS
+template_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), 'templates'))
+app = Flask(__name__, template_folder=template_dir)
+
 app.secret_key = 'pdf_converter_secret_key'
 app.config['MAX_CONTENT_LENGTH'] = 50 * 1024 * 1024  # Limit uploads to 50MB
 
