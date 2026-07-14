@@ -114,13 +114,24 @@
         </section>
     </main>
 
-    <!-- FLOATING LINK CONFIGURATOR TOOLTIP -->
+    <!-- FLOATING LINK CONFIGURATOR TOOLTIP (UPGRADED WITH INLINE TEXT WRITING AND BUTTON STYLES) -->
     <div id="link-configurator" class="hidden absolute bg-white border border-slate-200 shadow-2xl rounded-xl p-4 z-50 w-72 space-y-3">
-        <h4 class="text-xs font-black text-slate-700 uppercase tracking-wider">Configure Link / Button</h4>
+        <h4 class="text-xs font-black text-slate-700 uppercase tracking-wider">Configure Element</h4>
+        
+        <!-- Editable text block overrides -->
         <div>
-            <label class="block text-[9px] font-bold text-slate-400 uppercase">Text Selected</label>
-            <div id="config-selected-text" class="text-xs text-slate-600 font-semibold italic truncate bg-slate-50 p-1.5 rounded border border-slate-100 mt-1"></div>
+            <label class="block text-[9px] font-bold text-slate-400 uppercase">Override Text Content</label>
+            <input type="text" id="config-edited-text" placeholder="Type new button text..." class="w-full text-xs rounded border border-slate-200 py-1.5 px-2 mt-1 border">
         </div>
+        
+        <div id="config-mask-color-panel" class="hidden">
+            <label class="block text-[9px] font-bold text-slate-400 uppercase">Mask Background Color</label>
+            <div class="flex items-center gap-2 mt-1">
+                <input type="color" id="config-bg-color" value="#ffffff" class="w-8 h-8 rounded border border-slate-200 cursor-pointer p-0.5">
+                <span class="text-[10px] text-slate-400">Covers original text underneath</span>
+            </div>
+        </div>
+
         <div>
             <label class="block text-[9px] font-bold text-slate-400 uppercase">Destination Type</label>
             <select id="config-link-type" onchange="toggleLinkTargetInputs()" class="w-full text-xs rounded border border-slate-200 py-1.5 px-2 mt-1 bg-white border">
@@ -133,6 +144,39 @@
             <input type="text" id="config-link-target-url" placeholder="https://example.com" class="w-full text-xs rounded border border-slate-200 py-1.5 px-2 mt-1 border">
             <select id="config-link-target-scroll" class="hidden w-full text-xs rounded border border-slate-200 py-1.5 px-2 mt-1 bg-white border"></select>
         </div>
+
+        <!-- Custom Button Styling Toggles -->
+        <div class="border-t border-slate-100 pt-2 space-y-2">
+            <div class="flex items-center justify-between">
+                <label class="text-[10px] font-bold text-slate-500 uppercase">Enable Styled Button</label>
+                <input type="checkbox" id="config-is-button" onchange="toggleButtonStyleInputs()" class="rounded border-slate-200 text-indigo-600 focus:ring-indigo-500 w-4 h-4 cursor-pointer">
+            </div>
+            
+            <div id="config-button-settings-panel" class="hidden space-y-2">
+                <div class="grid grid-cols-2 gap-2">
+                    <div>
+                        <label class="block text-[9px] font-bold text-slate-400 uppercase">Style</label>
+                        <select id="config-btn-style" class="w-full text-[10px] rounded border border-slate-200 py-1 px-1.5 mt-0.5 bg-white border">
+                            <option value="filled">Filled Box</option>
+                            <option value="outline">Outline Border</option>
+                            <option value="underline">Underline Link</option>
+                            <option value="glass">Glassmorphic</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-[9px] font-bold text-slate-400 uppercase">Color Palette</label>
+                        <select id="config-btn-color" class="w-full text-[10px] rounded border border-slate-200 py-1 px-1.5 mt-0.5 bg-white border">
+                            <option value="indigo">Indigo</option>
+                            <option value="emerald">Emerald</option>
+                            <option value="rose">Rose</option>
+                            <option value="slate">Slate (Dark)</option>
+                            <option value="orange">Orange</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+        </div>
+
         <div>
             <label class="block text-[9px] font-bold text-slate-400 uppercase">Hover Effect Style</label>
             <select id="config-hover-effect" class="w-full text-xs rounded border border-slate-200 py-1.5 px-2 mt-1 bg-white border">
@@ -149,7 +193,7 @@
         </div>
     </div>
 
-    <!-- FLOATING TRANSITION SELECTOR TOOLTIP (UPGRADED WITH DYNAMIC CUSTOM OPTIONS) -->
+    <!-- FLOATING TRANSITION SELECTOR TOOLTIP -->
     <div id="transition-configurator" class="hidden absolute bg-white border border-slate-200 shadow-2xl rounded-xl p-4 z-50 w-72 space-y-3">
         <h4 class="text-xs font-black text-slate-700 uppercase tracking-wider">Page Scroll Transition</h4>
         <p class="text-[10px] text-slate-400">Choose the transition effect when sliding into this section.</p>
@@ -305,6 +349,7 @@
                     
                     textSpan.dataset.text = span.text;
                     textSpan.dataset.pageNum = page.number;
+                    textSpan.dataset.font_size = span.font_size;
                     textSpan.dataset.bbox = JSON.stringify(span.bbox);
                     
                     // Highlight the bounding box if it already contains an auto-detected or saved link
@@ -369,6 +414,16 @@
             }
         }
 
+        function toggleButtonStyleInputs() {
+            const isBtn = document.getElementById('config-is-button').checked;
+            const settingsPanel = document.getElementById('config-button-settings-panel');
+            if (isBtn) {
+                settingsPanel.classList.remove('hidden');
+            } else {
+                settingsPanel.classList.add('hidden');
+            }
+        }
+
         // Modal triggers
         function openLinkModal(textSpan, event) {
             event.stopPropagation();
@@ -380,7 +435,6 @@
             modal.style.top = `${rect.bottom + window.scrollY + 5}px`;
             modal.style.left = `${rect.left + window.scrollX}px`;
             
-            document.getElementById('config-selected-text').textContent = textSpan.dataset.text;
             activeSpan = textSpan;
             
             const pageNum = parseInt(textSpan.dataset.pageNum);
@@ -388,8 +442,28 @@
             const existing = findCustomLink(pageNum, bbox);
             
             const deleteBtn = document.getElementById('config-delete-btn');
+            const textOverride = document.getElementById('config-edited-text');
+            const maskColorPanel = document.getElementById('config-mask-color-panel');
+            
+            // Listen for keyup to show/hide mask color selector
+            textOverride.addEventListener('input', () => {
+                if (textOverride.value.trim().length > 0) {
+                    maskColorPanel.classList.remove('hidden');
+                } else {
+                    maskColorPanel.classList.add('hidden');
+                }
+            });
+
             if (existing) {
                 deleteBtn.classList.remove('hidden');
+                textOverride.value = existing.edited_text || '';
+                if (textOverride.value.trim().length > 0) {
+                    maskColorPanel.classList.remove('hidden');
+                    document.getElementById('config-bg-color').value = existing.bg_color || '#ffffff';
+                } else {
+                    maskColorPanel.classList.add('hidden');
+                }
+                
                 document.getElementById('config-link-type').value = existing.href.startsWith('#page-') ? 'scroll' : 'url';
                 toggleLinkTargetInputs();
                 if (existing.href.startsWith('#page-')) {
@@ -397,12 +471,21 @@
                 } else {
                     document.getElementById('config-link-target-url').value = existing.href;
                 }
+                
+                document.getElementById('config-is-button').checked = existing.is_button || false;
+                toggleButtonStyleInputs();
+                document.getElementById('config-btn-style').value = existing.btn_style || 'filled';
+                document.getElementById('config-btn-color').value = existing.btn_color || 'indigo';
                 document.getElementById('config-hover-effect').value = existing.hover_effect || 'glow';
             } else {
                 deleteBtn.classList.add('hidden');
+                textOverride.value = '';
+                maskColorPanel.classList.add('hidden');
                 document.getElementById('config-link-type').value = 'url';
                 toggleLinkTargetInputs();
                 document.getElementById('config-link-target-url').value = '';
+                document.getElementById('config-is-button').checked = false;
+                toggleButtonStyleInputs();
                 document.getElementById('config-hover-effect').value = 'glow';
             }
         }
@@ -556,10 +639,17 @@
             const pageNum = parseInt(activeSpan.dataset.pageNum);
             const bbox = JSON.parse(activeSpan.dataset.bbox);
             const text = activeSpan.dataset.text;
+            const fontSize = parseFloat(activeSpan.dataset.font_size);
             
             const type = document.getElementById('config-link-type').value;
             const href = type === 'url' ? document.getElementById('config-link-target-url').value.trim() : document.getElementById('config-link-target-scroll').value;
             const hover_effect = document.getElementById('config-hover-effect').value;
+            
+            const edited_text = document.getElementById('config-edited-text').value.trim();
+            const bg_color = document.getElementById('config-bg-color').value;
+            const is_button = document.getElementById('config-is-button').checked;
+            const btn_style = document.getElementById('config-btn-style').value;
+            const btn_color = document.getElementById('config-btn-color').value;
             
             if (type === 'url' && !href) {
                 alert("Please enter a target URL");
@@ -574,7 +664,13 @@
                 text: text,
                 href: href,
                 hover_effect: hover_effect,
-                target_blank: type === 'url'
+                target_blank: type === 'url',
+                edited_text: edited_text,
+                bg_color: bg_color,
+                is_button: is_button,
+                btn_style: btn_style,
+                btn_color: btn_color,
+                font_size: fontSize
             });
             
             activeSpan.classList.add('has-link');
@@ -641,7 +737,7 @@
                 item.className = 'p-2 bg-slate-50 border border-slate-100 rounded flex justify-between items-center';
                 item.innerHTML = `
                     <div class="truncate pr-2">
-                        <span class="font-bold text-slate-700">"${l.text}"</span>
+                        <span class="font-bold text-slate-700">"${l.edited_text || l.text}"</span>
                         <span class="block text-[10px] text-slate-400">Page ${l.page} → ${l.href} (${l.hover_effect})</span>
                     </div>
                     <button type="button" onclick="removeHotspotByIndex(${idx})" class="text-rose-500 hover:text-rose-700 font-bold">×</button>
