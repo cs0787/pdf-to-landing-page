@@ -244,59 +244,31 @@ def get_base_styles():
         
         /* 2. PARALLAX BACKGROUND ZOOM */
         section.parallax-section img {
-            animation: zoom-in linear both;
-            animation-timeline: view();
-            animation-range: entry 0% exit 100%;
+            transform: scale(calc(1 + (var(--reveal-progress, 0) * var(--zoom-scale-offset, 0.2)))) translateY(calc((1 - var(--reveal-progress, 0)) * var(--zoom-translate-offset, 5%)));
             transform-origin: center center;
-        }
-        @keyframes zoom-in {
-            from { transform: scale(1) translateY(0); }
-            to { transform: scale(var(--zoom-scale, 1.2)) translateY(var(--zoom-translate, 5%)); }
+            will-change: transform;
         }
         
         /* 3. SPLIT SCREEN SLIDE */
-        section.split-section {
-            view-timeline-name: --split;
-        }
         section.split-section .left-half {
-            animation: split-move-left linear both;
-            animation-timeline: view();
-            animation-range: entry 0% cover 100%;
+            transform: var(--split-left-start, translateY(40%));
+            will-change: transform;
         }
         section.split-section .right-half {
-            animation: split-move-right linear both;
-            animation-timeline: view();
-            animation-range: entry 0% cover 100%;
-        }
-        @keyframes split-move-left {
-            from { transform: var(--left-start, translateY(40%)); }
-            to { transform: translateY(0); }
-        }
-        @keyframes split-move-right {
-            from { transform: var(--right-start, translateY(-40%)); }
-            to { transform: translateY(0); }
+            transform: var(--split-right-start, translateY(-40%));
+            will-change: transform;
         }
         
         /* 4. CINEMATIC CURTAIN REVEAL */
         section.curtain-section .page-container {
-            animation: curtain-open linear both;
-            animation-timeline: view();
-            animation-range: entry 0% entry 100%;
-        }
-        @keyframes curtain-open {
-            from { clip-path: var(--curtain-start, inset(0 50% 0 50%)); }
-            to { clip-path: inset(0 0% 0 0%); }
+            clip-path: var(--curtain-clip-state, inset(0 50% 0 50%));
+            will-change: clip-path;
         }
         
         /* 5. HORIZONTAL SECTION SLIDE */
         section.horizontal-section .page-container {
-            animation: slide-left linear both;
-            animation-timeline: view();
-            animation-range: entry 0% entry 100%;
-        }
-        @keyframes slide-left {
-            from { transform: var(--slide-start, translateX(100%)); }
-            to { transform: translateX(0); }
+            transform: var(--slide-transform-state, translateX(100%));
+            will-change: transform;
         }
         
         /* 6. DYNAMIC COLOR BLEED */
@@ -304,13 +276,10 @@ def get_base_styles():
             position: absolute;
             inset: 0;
             z-index: 1;
-            animation: color-fade linear both;
-            animation-timeline: view();
-            animation-range: entry 0% exit 50%;
-        }
-        @keyframes color-fade {
-            from { background-color: #ffffff; filter: blur(var(--bleed-blur, 20px)); opacity: 0; }
-            to { background-color: var(--bleed-color, #ff3366); filter: blur(0); opacity: 1; }
+            opacity: var(--reveal-progress, 0);
+            filter: blur(calc((1 - var(--reveal-progress, 0)) * var(--bleed-blur, 20px)));
+            background-color: var(--bleed-color, #ff3366);
+            will-change: opacity, filter;
         }
         
         /* 7. 3D CUBE ROTATION */
@@ -319,71 +288,39 @@ def get_base_styles():
         }
         section.cube-section .page-container {
             transform-style: preserve-3d;
-            animation: cube-rotate linear both;
-            animation-timeline: view();
-            animation-range: entry 0% exit 100%;
-        }
-        @keyframes cube-rotate {
-            from { transform: var(--cube-start, rotateX(-45deg) translateZ(-30vh)); opacity: 0.3; }
-            to { transform: rotateX(0deg) translateZ(0); opacity: 1; }
+            transform: rotateX(calc((1 - var(--reveal-progress, 0)) * var(--cube-rotate-deg, -45deg))) translateZ(calc((1 - var(--reveal-progress, 0)) * -30vh));
+            opacity: calc(0.3 + (var(--reveal-progress, 0) * 0.7));
+            will-change: transform, opacity;
         }
         
         /* 8. TEXT MASK REVEAL */
         section.mask-section .mask-text-element {
-            animation: text-grow linear both;
-            animation-timeline: view();
-            animation-range: entry 0% exit 100%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            text-align: center;
-            width: 100%;
-            pointer-events: none;
-        }
-        @keyframes text-grow {
-            from { transform: scale(1); opacity: 0; }
-            to { transform: scale(var(--mask-scale, 15)); opacity: 1; }
+            transform: scale(calc(1 + (var(--reveal-progress, 0) * (var(--mask-scale, 15) - 1))));
+            opacity: var(--reveal-progress, 0);
+            will-change: transform, opacity;
         }
 
-        /* PURE CSS SCROLL TRANSITIONS FOR STANDARD STYLES */
+        /* COMPATIBLE STATIC SCROLL TRANSITIONS */
         section.effect-fade .page-container {
-            animation: fade-in-scroll linear both;
-            animation-timeline: view();
-            animation-range: entry 0% cover 50%;
-        }
-        @keyframes fade-in-scroll {
-            from { opacity: 0; }
-            to { opacity: 1; }
+            opacity: var(--reveal-progress, 0);
+            will-change: opacity;
         }
 
         section.effect-slide-up .page-container {
-            animation: slide-up-scroll linear both;
-            animation-timeline: view();
-            animation-range: entry 0% cover 40%;
-        }
-        @keyframes slide-up-scroll {
-            from { opacity: 0; transform: var(--start-translate, translateY(60px)); }
-            to { opacity: 1; transform: translateY(0); }
+            opacity: var(--reveal-progress, 0);
+            transform: translateY(calc((1 - var(--reveal-progress, 0)) * var(--start-translate, 60px)));
+            will-change: opacity, transform;
         }
 
         section.effect-zoom-in .page-container {
-            animation: zoom-in-scroll linear both;
-            animation-timeline: view();
-            animation-range: entry 0% cover 45%;
-        }
-        @keyframes zoom-in-scroll {
-            from { opacity: 0; transform: var(--start-translate, scale(0.93)); }
-            to { opacity: 1; transform: scale(1); }
+            opacity: var(--reveal-progress, 0);
+            transform: scale(calc(0.93 + (var(--reveal-progress, 0) * 0.07)));
+            will-change: opacity, transform;
         }
 
         section.effect-reveal .page-container {
-            animation: wipe-reveal-scroll linear both;
-            animation-timeline: view();
-            animation-range: entry 0% entry 100%;
-        }
-        @keyframes wipe-reveal-scroll {
-            from { clip-path: var(--start-clip, inset(100% 0 0 0)); }
-            to { clip-path: inset(0 0 0 0); }
+            clip-path: var(--start-clip, inset(100% 0 0 0));
+            will-change: clip-path;
         }
 
         /* BUTTON HOVER CODES [2] */
@@ -451,6 +388,16 @@ def get_base_styles():
             background-color: rgba(255, 255, 255, 0.15); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
             color: #1e293b !important; border: 1px solid rgba(255, 255, 255, 0.3) !important; border-radius: 6px; font-weight: 600;
         }
+
+        /* Multi-page load animations */
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+        @keyframes slideUpIn { from { opacity: 0; transform: translateY(50px); } to { opacity: 1; transform: translateY(0); } }
+        @keyframes zoomIn { from { opacity: 0; transform: scale(0.93); } to { opacity: 1; transform: scale(1); } }
+        @keyframes revealIn { from { clip-path: inset(100% 0 0 0); } to { clip-path: inset(0 0 0 0); } }
+        @keyframes clipRevealIn { from { clip-path: circle(0% at 50% 50%); } to { clip-path: circle(150% at 50% 50%); } }
+        @keyframes splitLeft { from { transform: translateY(-60px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+        @keyframes splitRight { from { transform: translateY(60px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+        @keyframes horizontalSnapIn { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
     """
 
 # ----------------- APP ROUTES -----------------
@@ -654,38 +601,39 @@ def compile_site():
                 
             elif transition_effect == "parallax-zoom":
                 effect_class = "parallax-section"
-                zoom_scale = custom_opts.get("zoom_scale", "1.2")
+                zoom_scale = float(custom_opts.get("zoom_scale", "1.2"))
                 zoom_translate = custom_opts.get("zoom_translate", "5%")
-                css_vars.append(f"--zoom-scale: {zoom_scale}")
-                css_vars.append(f"--zoom-translate: {zoom_translate}")
+                zoom_scale_offset = zoom_scale - 1.0
+                css_vars.append(f"--zoom-scale-offset: {zoom_scale_offset}")
+                css_vars.append(f"--zoom-translate-offset: {zoom_translate}")
                 
             elif transition_effect == "split-screen":
                 effect_class = "split-section"
                 split_direction = custom_opts.get("split_direction", "vertical")
                 if split_direction == "vertical":
-                    css_vars.append("--left-start: translateY(40%)")
-                    css_vars.append("--right-start: translateY(-40%)")
+                    css_vars.append("--split-left-start: translateY(40%)")
+                    css_vars.append("--split-right-start: translateY(-40%)")
                 else:
-                    css_vars.append("--left-start: translateX(-40%)")
-                    css_vars.append("--right-start: translateX(40%)")
+                    css_vars.append("--split-left-start: translateX(-40%)")
+                    css_vars.append("--split-right-start: translateX(40%)")
                     
             elif transition_effect == "curtain-reveal":
                 effect_class = "curtain-section"
                 curtain_shape = custom_opts.get("shape", "circle")
                 if curtain_shape == "circle":
-                    css_vars.append("--curtain-start: circle(0% at 50% 50%)")
+                    css_vars.append("--curtain-clip-state: circle(calc((1 - var(--reveal-progress, 0)) * 50% + var(--reveal-progress, 0) * 150%) at 50% 50%)")
                 elif curtain_shape == "rectangle":
-                    css_vars.append("--curtain-start: inset(50% 50% 50% 50%)")
+                    css_vars.append("--curtain-clip-state: inset(calc((1 - var(--reveal-progress, 0)) * 50%) calc((1 - var(--reveal-progress, 0)) * 50%) calc((1 - var(--reveal-progress, 0)) * 50%) calc((1 - var(--reveal-progress, 0)) * 50%))")
                 elif curtain_shape == "diamond":
-                    css_vars.append("--curtain-start: polygon(50% 50%, 50% 50%, 50% 50%, 50% 50%)")
+                    css_vars.append("--curtain-clip-state: polygon(50% calc((1 - var(--reveal-progress, 0)) * 50%), calc(50% + var(--reveal-progress, 0) * 50%) 50%, 50% calc(50% + var(--reveal-progress, 0) * 50%), calc(50% - var(--reveal-progress, 0) * 50%) 50%)")
                     
             elif transition_effect == "horizontal-slide":
                 effect_class = "horizontal-section"
                 slide_dir = custom_opts.get("slide_direction", "right-to-left")
                 if slide_dir == "right-to-left":
-                    css_vars.append("--slide-start: translateX(100%)")
+                    css_vars.append("--slide-transform-state: translateX(calc((1 - var(--reveal-progress, 0)) * 100%))")
                 else:
-                    css_vars.append("--slide-start: translateX(-100%)")
+                    css_vars.append("--slide-transform-state: translateX(calc((1 - var(--reveal-progress, 0)) * -100%))")
                     
             elif transition_effect == "color-bleed":
                 effect_class = "bleed-section"
@@ -710,9 +658,9 @@ def compile_site():
                 cube_dir = custom_opts.get("cube_direction", "down")
                 css_vars.append(f"--cube-perspective: {cube_persp}")
                 if cube_dir == "down":
-                    css_vars.append("--cube-start: rotateX(-45deg) translateZ(-30vh)")
+                    css_vars.append("--cube-rotate-deg: -45deg")
                 else:
-                    css_vars.append("--cube-start: rotateX(45deg) translateZ(-30vh)")
+                    css_vars.append("--cube-rotate-deg: 45deg")
                     
             elif transition_effect == "text-mask-reveal":
                 effect_class = "mask-section"
@@ -947,7 +895,6 @@ def compile_site():
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{meta_title}</title>
     <meta name="description" content="{meta_desc}">
-    <script>document.documentElement.classList.add('js-enabled');</script>
     {ga_script}
     <style>{get_base_styles()}</style>
 </head>
@@ -957,6 +904,43 @@ def compile_site():
         {"".join(pages_body_html)}
     </main>
     {form_close}
+    
+    <!-- HIGH COMPATIBILITY VIEWPORT REACTIVE OBSERVER ENGINE [2] -->
+    <script>
+    document.documentElement.classList.add('js-enabled');
+    document.addEventListener("DOMContentLoaded", () => {{
+        const sections = document.querySelectorAll('section');
+        
+        function updateScroll() {{
+            const viewportHeight = window.innerHeight;
+            sections.forEach(section => {{
+                const rect = section.getBoundingClientRect();
+                if (rect.top < viewportHeight && rect.bottom > 0) {{
+                    const distance = viewportHeight;
+                    const progress = (viewportHeight - rect.top) / distance;
+                    const clamped = Math.max(0, Math.min(1, progress));
+                    section.style.setProperty('--reveal-progress', clamped);
+                }} else if (rect.top >= viewportHeight) {{
+                    section.style.setProperty('--reveal-progress', 0);
+                }} else if (rect.bottom <= 0) {{
+                    section.style.setProperty('--reveal-progress', 1);
+                }}
+            }});
+            ticking = false;
+        }}
+        
+        let ticking = false;
+        window.addEventListener('scroll', () => {{
+            if (!ticking) {{
+                window.requestAnimationFrame(updateScroll);
+                ticking = true;
+            }
+        }});
+        
+        // Execute immediately on load to hydrate current folds view state
+        updateScroll();
+    }});
+    </script>
 </body>
 </html>"""
             
