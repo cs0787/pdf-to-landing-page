@@ -207,7 +207,7 @@ def detect_smart_button_intents(page, section_pages, is_multipage):
             
     return detected
 
-# 7. Global CSS Configurations [2,3]
+# 7. Global CSS Configurations
 def get_base_styles():
     return """
         /* GLOBAL SETUP: SMOOTH SCROLL & SNAP */
@@ -242,7 +242,7 @@ def get_base_styles():
             box-shadow: 0 -15px 35px rgba(0,0,0,0.08);
         }
         
-        /* 2. PARALLAX BACKGROUND ZOOM [1.1.4] */
+        /* 2. PARALLAX BACKGROUND ZOOM */
         section.parallax-section img {
             animation: zoom-in linear both;
             animation-timeline: view();
@@ -254,19 +254,30 @@ def get_base_styles():
             to { transform: scale(var(--zoom-scale, 1.2)) translateY(var(--zoom-translate, 5%)); }
         }
         
-        /* 3. SPLIT SCREEN SLIDE [1.1.4] */
-        section.split-section .left-half,
-        section.split-section .right-half {
-            animation: split-move linear both;
+        /* 3. SPLIT SCREEN SLIDE */
+        section.split-section {
+            view-timeline-name: --split;
+        }
+        section.split-section .left-half {
+            animation: split-move-left linear both;
             animation-timeline: view();
             animation-range: entry 0% cover 100%;
         }
-        @keyframes split-move {
-            from { transform: var(--split-start, translateY(40%)); }
+        section.split-section .right-half {
+            animation: split-move-right linear both;
+            animation-timeline: view();
+            animation-range: entry 0% cover 100%;
+        }
+        @keyframes split-move-left {
+            from { transform: var(--left-start, translateY(40%)); }
+            to { transform: translateY(0); }
+        }
+        @keyframes split-move-right {
+            from { transform: var(--right-start, translateY(-40%)); }
             to { transform: translateY(0); }
         }
         
-        /* 4. CINEMATIC CURTAIN REVEAL [1.1.4] */
+        /* 4. CINEMATIC CURTAIN REVEAL */
         section.curtain-section .page-container {
             animation: curtain-open linear both;
             animation-timeline: view();
@@ -277,7 +288,7 @@ def get_base_styles():
             to { clip-path: inset(0 0% 0 0%); }
         }
         
-        /* 5. HORIZONTAL SECTION SLIDE [1.1.4] */
+        /* 5. HORIZONTAL SECTION SLIDE */
         section.horizontal-section .page-container {
             animation: slide-left linear both;
             animation-timeline: view();
@@ -288,7 +299,7 @@ def get_base_styles():
             to { transform: translateX(0); }
         }
         
-        /* 6. DYNAMIC COLOR BLEED [1.1.4] */
+        /* 6. DYNAMIC COLOR BLEED */
         section.bleed-section .bleed-bg {
             position: absolute;
             inset: 0;
@@ -302,7 +313,7 @@ def get_base_styles():
             to { background-color: var(--bleed-color, #ff3366); filter: blur(0); opacity: 1; }
         }
         
-        /* 7. 3D CUBE ROTATION [1.1.4] */
+        /* 7. 3D CUBE ROTATION */
         section.cube-section {
             perspective: var(--cube-perspective, 1000px);
         }
@@ -317,7 +328,7 @@ def get_base_styles():
             to { transform: rotateX(0deg) translateZ(0); opacity: 1; }
         }
         
-        /* 8. TEXT MASK REVEAL [1.1.4] */
+        /* 8. TEXT MASK REVEAL */
         section.mask-section .mask-text-element {
             animation: text-grow linear both;
             animation-timeline: view();
@@ -332,6 +343,47 @@ def get_base_styles():
         @keyframes text-grow {
             from { transform: scale(1); opacity: 0; }
             to { transform: scale(var(--mask-scale, 15)); opacity: 1; }
+        }
+
+        /* PURE CSS SCROLL TRANSITIONS FOR STANDARD STYLES */
+        section.effect-fade .page-container {
+            animation: fade-in-scroll linear both;
+            animation-timeline: view();
+            animation-range: entry 0% cover 50%;
+        }
+        @keyframes fade-in-scroll {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+
+        section.effect-slide-up .page-container {
+            animation: slide-up-scroll linear both;
+            animation-timeline: view();
+            animation-range: entry 0% cover 40%;
+        }
+        @keyframes slide-up-scroll {
+            from { opacity: 0; transform: var(--start-translate, translateY(60px)); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        section.effect-zoom-in .page-container {
+            animation: zoom-in-scroll linear both;
+            animation-timeline: view();
+            animation-range: entry 0% cover 45%;
+        }
+        @keyframes zoom-in-scroll {
+            from { opacity: 0; transform: var(--start-translate, scale(0.93)); }
+            to { opacity: 1; transform: scale(1); }
+        }
+
+        section.effect-reveal .page-container {
+            animation: wipe-reveal-scroll linear both;
+            animation-timeline: view();
+            animation-range: entry 0% entry 100%;
+        }
+        @keyframes wipe-reveal-scroll {
+            from { clip-path: var(--start-clip, inset(100% 0 0 0)); }
+            to { clip-path: inset(0 0 0 0); }
         }
 
         /* BUTTON HOVER CODES [2] */
@@ -399,38 +451,6 @@ def get_base_styles():
             background-color: rgba(255, 255, 255, 0.15); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
             color: #1e293b !important; border: 1px solid rgba(255, 255, 255, 0.3) !important; border-radius: 6px; font-weight: 600;
         }
-
-        /* ADVANCED TRANSITIONS */
-        .page-container[data-transition] {
-            transition: all var(--transition-speed, 0.9s) cubic-bezier(0.25, 1, 0.5, 1);
-            will-change: transform, opacity, clip-path;
-        }
-        html.js-enabled .page-container[data-transition="split-screen"] {
-            opacity: 1 !important; transform: none !important; clip-path: none !important;
-        }
-
-        /* Standard scroll transitions fallback layout */
-        html.js-enabled .page-container[data-transition="fade"] { opacity: 0; }
-        html.js-enabled .page-container[data-transition="fade"].is-visible { opacity: 1; }
-        
-        html.js-enabled .page-container[data-transition="slide-up"] { opacity: 0; transform: var(--start-translate, translateY(60px)); }
-        html.js-enabled .page-container[data-transition="slide-up"].is-visible { opacity: 1; transform: translateY(0); }
-        
-        html.js-enabled .page-container[data-transition="zoom-in"] { opacity: 0; transform: var(--start-translate, scale(0.93)); }
-        html.js-enabled .page-container[data-transition="zoom-in"].is-visible { opacity: 1; transform: scale(1); }
-        
-        html.js-enabled .page-container[data-transition="reveal"] { clip-path: var(--start-clip, inset(100% 0 0 0)); }
-        html.js-enabled .page-container[data-transition="reveal"].is-visible { clip-path: inset(0 0 0 0); }
-
-        /* Multi-page load animations */
-        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
-        @keyframes slideUpIn { from { opacity: 0; transform: translateY(50px); } to { opacity: 1; transform: translateY(0); } }
-        @keyframes zoomIn { from { opacity: 0; transform: scale(0.93); } to { opacity: 1; transform: scale(1); } }
-        @keyframes revealIn { from { clip-path: inset(100% 0 0 0); } to { clip-path: inset(0 0 0 0); } }
-        @keyframes clipRevealIn { from { clip-path: circle(0% at 50% 50%); } to { clip-path: circle(150% at 50% 50%); } }
-        @keyframes splitLeft { from { transform: translateY(-60px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
-        @keyframes splitRight { from { transform: translateY(60px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
-        @keyframes horizontalSnapIn { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
     """
 
 # ----------------- APP ROUTES -----------------
@@ -624,7 +644,7 @@ def compile_site():
             bleed_bg_html = ""
             mask_text_html = ""
             
-            # UPGRADED: Explicitly declare the transition attribute state variable
+            # UPGRADED & CORRECTED: Declare transition_attr correctly for both modes
             transition_attr = f'data-transition="{transition_effect}"' if (transition_effect and not is_multipage_mode) else ''
             
             if transition_effect == "sticky-cards":
@@ -643,9 +663,11 @@ def compile_site():
                 effect_class = "split-section"
                 split_direction = custom_opts.get("split_direction", "vertical")
                 if split_direction == "vertical":
-                    css_vars.append("--split-start: translateY(40%)")
+                    css_vars.append("--left-start: translateY(40%)")
+                    css_vars.append("--right-start: translateY(-40%)")
                 else:
-                    css_vars.append("--split-start: translateX(40%)")
+                    css_vars.append("--left-start: translateX(-40%)")
+                    css_vars.append("--right-start: translateX(40%)")
                     
             elif transition_effect == "curtain-reveal":
                 effect_class = "curtain-section"
@@ -883,7 +905,7 @@ def compile_site():
             # Render page content wrapped inside the uniform section block if single page mode
             if not is_multipage_mode:
                 return f"""
-                <section class="section-wrapper {effect_class}" style="{css_variables_style}; z-index: {p_num};">
+                <section class="section-wrapper {effect_class}" style="{css_variables_style}; z-index: {p_num}; {sticky_style}">
                     {bleed_bg_html}
                     {mask_text_html}
                     <div id="page-{p_num}" class="page-container" {transition_attr} style="{container_style}">
@@ -935,48 +957,6 @@ def compile_site():
         {"".join(pages_body_html)}
     </main>
     {form_close}
-    
-    <script>
-    document.addEventListener("DOMContentLoaded", () => {{
-        const observerOptions = {{
-            root: null,
-            rootMargin: "0px",
-            threshold: 0.02
-        }};
-        const observer = new IntersectionObserver((entries, observer) => {{
-            entries.forEach(entry => {{
-                if (entry.isIntersecting) {{
-                    const target = entry.target;
-                    target.classList.add("is-visible");
-                    setTimeout(() => {{
-                        const leftHalf = target.querySelector('.left-half');
-                        const rightHalf = target.querySelector('.right-half');
-                        if (leftHalf) leftHalf.style.transform = "none";
-                        if (rightHalf) rightHalf.style.transform = "none";
-                        target.style.transform = "none";
-                        target.style.clipPath = "none";
-                        target.style.opacity = "1";
-                    }}, 1000);
-                    observer.unobserve(target);
-                }}
-            }});
-        }}, observerOptions);
-        document.querySelectorAll(".page-container[data-transition]").forEach(page => {{
-            observer.observe(page);
-        }});
-        
-        // AUTO-RECOVERY FAILSAFE: Ensures that if IntersectionObserver is not fired 
-        // within 1.5 seconds, all sections are forced to visible (eliminates white screen bugs)
-        setTimeout(() => {{
-            document.querySelectorAll(".page-container").forEach(page => {{
-                page.classList.add("is-visible");
-                page.style.opacity = "1";
-                page.style.transform = "none";
-                page.style.clipPath = "none";
-            }});
-        }}, 1500);
-    }});
-    </script>
 </body>
 </html>"""
             
