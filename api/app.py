@@ -1,20 +1,19 @@
 import os
-from flask import Flask, request, render_template, redirect, url_for, flash, Response, jsonify
-
-# 1. INITIALIZE APP FIRST (So Vercel finds it immediately)
-template_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '../templates'))
-app = Flask(__name__, template_folder=template_dir)
-app.secret_key = 'pdf_converter_secret_key'
-app.config['MAX_CONTENT_LENGTH'] = 50 * 1024 * 1024  # Limit uploads to 50MB
-
-# 2. IMPORT HEAVY LIBRARIES AFTER APP IS DEFINED
 import re
 import io
 import base64
 import zipfile
 import traceback
+from flask import Flask, request, render_template, redirect, url_for, flash, Response, jsonify
 import fitz  # PyMuPDF
 from PIL import Image
+
+# The file is now in the root directory, so we just look for 'templates'
+template_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), 'templates'))
+app = Flask(__name__, template_folder=template_dir)
+
+app.secret_key = 'pdf_converter_secret_key'
+app.config['MAX_CONTENT_LENGTH'] = 50 * 1024 * 1024  # Limit uploads to 50MB
 
 def rects_overlap(r1, r2):
     return not (r1.x1 <= r2.x0 or r2.x1 <= r1.x0 or r1.y1 <= r2.y0 or r2.y1 <= r1.y0)
