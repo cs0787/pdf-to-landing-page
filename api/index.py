@@ -1,3 +1,7 @@
+# RESOLVES ONE LEVEL UP PATH ON PATH B
+template_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '../templates'))
+app = Flask(__name__, template_folder=template_dir)
+
 import os
 import re
 import io
