@@ -242,41 +242,46 @@ def get_base_styles():
             box-shadow: 0 -15px 35px rgba(0,0,0,0.08);
         }
         
-        /* 2. PARALLAX BACKGROUND ZOOM [2] */
+        /* 2. PARALLAX BACKGROUND ZOOM - continuously driven by --reveal-progress */
+        section.parallax-section {
+            overflow: hidden;
+        }
         section.parallax-section img {
             transform: var(--parallax-transform, scale(1) translateY(0));
             transform-origin: center center;
-            transition: transform var(--transition-speed, 1.2s) cubic-bezier(0.16, 1, 0.3, 1);
+            transition: transform 0.1s linear;
             will-change: transform;
         }
         
-        /* 3. SPLIT SCREEN SLIDE [2] */
-        section.split-section .left-half {
-            transform: var(--split-left-transform, translateY(100vh));
-            transition: transform var(--transition-speed, 1.2s) cubic-bezier(0.16, 1, 0.3, 1);
+        /* 3. SPLIT SCREEN SLIDE - two halves converge as the section enters view */
+        section.split-section .left-half,
+        section.split-section .right-half {
+            transition: transform var(--transition-speed, 1s) cubic-bezier(0.16, 1, 0.3, 1);
             will-change: transform;
+        }
+        section.split-section .left-half {
+            transform: var(--split-left-transform, translateY(0));
         }
         section.split-section .right-half {
-            transform: var(--split-right-transform, translateY(-100vh));
-            transition: transform var(--transition-speed, 1.2s) cubic-bezier(0.16, 1, 0.3, 1);
-            will-change: transform;
+            transform: var(--split-right-transform, translateY(0));
         }
         
-        /* 4. CINEMATIC CURTAIN REVEAL [2] */
+        /* 4. CINEMATIC CURTAIN REVEAL - clip-path opens from the center as you scroll */
         section.curtain-section .page-container {
-            clip-path: var(--curtain-clip-path, inset(0 50% 0 50%));
-            transition: clip-path var(--transition-speed, 1.2s) cubic-bezier(0.16, 1, 0.3, 1);
+            clip-path: var(--curtain-clip-path, circle(75% at 50% 50%));
+            transition: clip-path 0.1s linear;
             will-change: clip-path;
         }
         
-        /* 5. HORIZONTAL SECTION SLIDE [2] */
+        /* 5. HORIZONTAL SECTION SLIDE - glides in from the side, fading in */
         section.horizontal-section .page-container {
-            transform: var(--slide-transform-state, translateX(100vw));
-            transition: transform var(--transition-speed, 1.2s) cubic-bezier(0.16, 1, 0.3, 1), opacity var(--transition-speed, 1.2s) ease-out;
+            transform: var(--slide-transform-state, translateX(0));
+            opacity: var(--slide-h-opacity, 1);
+            transition: transform 0.1s linear, opacity 0.1s linear;
             will-change: transform, opacity;
         }
         
-        /* 6. DYNAMIC COLOR BLEED [2] */
+        /* 6. DYNAMIC COLOR BLEED - a tinted wash rushes across then dissolves */
         section.bleed-section .bleed-bg {
             position: absolute;
             inset: 0;
@@ -284,54 +289,55 @@ def get_base_styles():
             opacity: var(--bleed-opacity, 0);
             filter: blur(var(--bleed-blur-val, 20px));
             background-color: var(--bleed-color, #ff3366);
-            transition: opacity var(--transition-speed, 1s) ease-out, filter var(--transition-speed, 1s) ease-out;
+            transition: opacity 0.1s linear, filter 0.1s linear;
             will-change: opacity, filter;
+            pointer-events: none;
         }
         
-        /* 7. 3D CUBE ROTATION [2] */
+        /* 7. 3D CUBE ROTATION - tumbles upright as it enters the viewport */
         section.cube-section {
             perspective: var(--cube-perspective, 1000px);
         }
         section.cube-section .page-container {
             transform-style: preserve-3d;
-            transform: var(--cube-transform, rotateX(-45deg) translateZ(-30vh));
-            opacity: var(--cube-opacity, 0.3);
-            transition: transform var(--transition-speed, 1.2s) cubic-bezier(0.16, 1, 0.3, 1), opacity var(--transition-speed, 1.2s) ease-out;
+            transform: var(--cube-transform, rotateX(0deg) translateZ(0));
+            opacity: var(--cube-opacity, 1);
+            transition: transform 0.1s linear, opacity 0.1s linear;
             will-change: transform, opacity;
         }
         
-        /* 8. TEXT MASK REVEAL [2] */
+        /* 8. TEXT MASK REVEAL - oversized headline scales down and settles centered */
         section.mask-section .mask-text-element {
-            transform: var(--mask-transform, scale(0.5));
-            opacity: var(--mask-opacity, 0);
-            transition: transform var(--transition-speed, 1.2s) cubic-bezier(0.16, 1, 0.3, 1), opacity var(--transition-speed, 1.2s) ease-out;
+            transform: var(--mask-transform, translate(-50%, -50%) scale(1));
+            opacity: var(--mask-opacity, 1);
+            transition: transform 0.1s linear, opacity 0.1s linear;
             will-change: transform, opacity;
         }
 
-        /* COMPATIBLE STATIC SCROLL TRANSITIONS */
+        /* COMPATIBLE STATIC SCROLL TRANSITIONS - all driven by --reveal-progress (0 to 1) */
         section.effect-fade .page-container {
-            opacity: var(--fade-opacity, 0);
-            transition: opacity var(--transition-speed, 1s) ease-out;
+            opacity: var(--fade-opacity, 1);
+            transition: opacity 0.1s linear;
             will-change: opacity;
         }
 
         section.effect-slide-up .page-container {
-            opacity: var(--slide-opacity, 0);
-            transform: var(--slide-transform, translateY(60px));
-            transition: transform var(--transition-speed, 1.2s) cubic-bezier(0.16, 1, 0.3, 1), opacity var(--transition-speed, 1.2s) ease-out;
+            opacity: var(--slide-opacity, 1);
+            transform: var(--slide-transform, translateY(0));
+            transition: transform 0.1s linear, opacity 0.1s linear;
             will-change: opacity, transform;
         }
 
         section.effect-zoom-in .page-container {
-            opacity: var(--zoom-opacity, 0);
-            transform: var(--zoom-transform, scale(0.93));
-            transition: transform var(--transition-speed, 1.2s) cubic-bezier(0.16, 1, 0.3, 1), opacity var(--transition-speed, 1.2s) ease-out;
+            opacity: var(--zoom-opacity, 1);
+            transform: var(--zoom-transform, scale(1));
+            transition: transform 0.1s linear, opacity 0.1s linear;
             will-change: opacity, transform;
         }
 
         section.effect-reveal .page-container {
-            clip-path: var(--reveal-clip-path, inset(100% 0 0 0));
-            transition: clip-path var(--transition-speed, 1.2s) cubic-bezier(0.16, 1, 0.3, 1);
+            clip-path: var(--reveal-clip-path, inset(0% 0 0 0));
+            transition: clip-path 0.1s linear;
             will-change: clip-path;
         }
 
@@ -612,30 +618,17 @@ def compile_site():
             elif transition_effect == "split-screen":
                 effect_class = "split-section"
                 split_direction = custom_opts.get("split_direction", "vertical")
-                if split_direction == "vertical":
-                    css_vars.append("--split-left-start: translateY(100%)")
-                    css_vars.append("--split-right-start: translateY(-100%)")
-                else:
-                    css_vars.append("--split-left-start: translateX(-100%)")
-                    css_vars.append("--split-right-start: translateX(100%)")
+                css_vars.append(f"--split-direction: {split_direction}")
                     
             elif transition_effect == "curtain-reveal":
                 effect_class = "curtain-section"
                 curtain_shape = custom_opts.get("shape", "circle")
-                if curtain_shape == "circle":
-                    css_vars.append("--curtain-start: circle(0% at 50% 50%)")
-                elif curtain_shape == "rectangle":
-                    css_vars.append("--curtain-start: inset(0 50% 0 50%)")
-                elif curtain_shape == "diamond":
-                    css_vars.append("--curtain-start: polygon(50% 50%, 50% 50%, 50% 50%, 50% 50%)")
+                css_vars.append(f"--curtain-shape: {curtain_shape}")
                     
             elif transition_effect == "horizontal-slide":
                 effect_class = "horizontal-section"
                 slide_dir = custom_opts.get("slide_direction", "right-to-left")
-                if slide_dir == "right-to-left":
-                    css_vars.append("--slide-start: translateX(100%)")
-                else:
-                    css_vars.append("--slide-start: translateX(-100%)")
+                css_vars.append(f"--slide-direction: {slide_dir}")
                     
             elif transition_effect == "color-bleed":
                 effect_class = "bleed-section"
@@ -659,10 +652,7 @@ def compile_site():
                 cube_persp = custom_opts.get("perspective", "1000px")
                 cube_dir = custom_opts.get("cube_direction", "down")
                 css_vars.append(f"--cube-perspective: {cube_persp}")
-                if cube_dir == "down":
-                    css_vars.append("--cube-start: rotateX(-45deg) translateZ(-30vh)")
-                else:
-                    css_vars.append("--cube-start: rotateX(45deg) translateZ(-30vh)")
+                css_vars.append(f"--cube-direction: {cube_dir}")
                     
             elif transition_effect == "text-mask-reveal":
                 effect_class = "mask-section"
@@ -670,7 +660,7 @@ def compile_site():
                 mask_scale = custom_opts.get("mask_scale", "15")
                 css_vars.append(f"--mask-scale: {mask_scale}")
                 mask_text_html = f"""
-                <div class="mask-text-element" style="position: absolute; z-index: 20; color: #1e293b; font-weight: 900; font-family: -apple-system, sans-serif; letter-spacing: -2px;">
+                <div class="mask-text-element" style="position: absolute; top: 50%; left: 50%; z-index: 20; color: #1e293b; font-weight: 900; font-family: -apple-system, sans-serif; letter-spacing: -2px; font-size: calc(var(--mask-scale, 15) * 1vw); white-space: nowrap;">
                     {mask_title}
                 </div>
                 """
@@ -680,13 +670,10 @@ def compile_site():
                 effect_class = "effect-fade"
             elif transition_effect == "slide-up":
                 effect_class = "effect-slide-up"
-                css_vars.append("--start-translate: translateY(60px)")
             elif transition_effect == "zoom-in":
                 effect_class = "effect-zoom-in"
-                css_vars.append("--start-translate: scale(0.93)")
             elif transition_effect == "reveal":
                 effect_class = "effect-reveal"
-                css_vars.append("--start-clip: inset(100% 0 0 0)")
 
             speed = custom_opts.get("speed", "0.9s")
             css_vars.append(f"--transition-speed: {speed}")
@@ -908,48 +895,131 @@ def compile_site():
     </main>
     {form_close}
     
-    <!-- HIGH COMPATIBILITY VIEWPORT REACTIVE OBSERVER ENGINE [2] -->
+    <!-- HIGH COMPATIBILITY VIEWPORT REACTIVE SCROLL-TRANSITION ENGINE -->
     <script>
     document.documentElement.classList.add('js-enabled');
     document.addEventListener("DOMContentLoaded", () => {{
-        const sections = document.querySelectorAll('section');
-        
+        const sections = Array.from(document.querySelectorAll('section'));
+
+        // Cache each section's static config (effect type + params) once, since
+        // these never change - only the live scroll progress does.
+        const sectionState = sections.map(section => {{
+            const cs = getComputedStyle(section);
+            const readNum = (name, fallback) => {{
+                const raw = cs.getPropertyValue(name).trim();
+                const n = parseFloat(raw);
+                return isNaN(n) ? fallback : n;
+            }};
+            const readStr = (name, fallback) => {{
+                const raw = cs.getPropertyValue(name).trim();
+                return raw ? raw.replace(/^["']|["']$/g, '') : fallback;
+            }};
+            return {{
+                el: section,
+                container: section.querySelector('.page-container'),
+                bleedBg: section.querySelector('.bleed-bg'),
+                maskText: section.querySelector('.mask-text-element'),
+                isParallax: section.classList.contains('parallax-section'),
+                isSplit: section.classList.contains('split-section'),
+                isCurtain: section.classList.contains('curtain-section'),
+                isHorizontal: section.classList.contains('horizontal-section'),
+                isBleed: section.classList.contains('bleed-section'),
+                isCube: section.classList.contains('cube-section'),
+                isMask: section.classList.contains('mask-section'),
+                isFade: section.classList.contains('effect-fade'),
+                isSlideUp: section.classList.contains('effect-slide-up'),
+                isZoomIn: section.classList.contains('effect-zoom-in'),
+                isReveal: section.classList.contains('effect-reveal'),
+                zoomScaleOffset: readNum('--zoom-scale-offset', 0.2),
+                zoomTranslateOffset: readNum('--zoom-translate-offset', 5),
+                splitDirection: readStr('--split-direction', 'vertical'),
+                curtainShape: readStr('--curtain-shape', 'circle'),
+                slideDirection: readStr('--slide-direction', 'right-to-left'),
+                bleedBlurAmount: readNum('--bleed-blur', 20),
+                cubeDirection: readStr('--cube-direction', 'down'),
+                maskScale: readNum('--mask-scale', 15)
+            }};
+        }});
+
+        function easeOutCubic(t) {{ return 1 - Math.pow(1 - t, 3); }}
+        function clamp01(v) {{ return Math.max(0, Math.min(1, v)); }}
+
         function updateScroll() {{
-            const viewportHeight = window.innerHeight;
-            sections.forEach(section => {{
-                const rect = section.getBoundingClientRect();
-                if (rect.top < viewportHeight && rect.bottom > 0) {{
-                    const distance = viewportHeight;
-                    const progress = (viewportHeight - rect.top) / distance;
-                    const clamped = Math.max(0, Math.min(1, progress));
-                    section.style.setProperty('--reveal-progress', clamped);
-                    
-                    // Add is-visible state trigger as standard intersection fallback [3]
-                    if (clamped > 0.05) {{
-                        section.classList.add("is-visible");
+            const vh = window.innerHeight;
+
+            sectionState.forEach(s => {{
+                const rect = s.el.getBoundingClientRect();
+                if (rect.bottom < -vh || rect.top > vh * 2) return; // skip far-offscreen sections
+
+                // progress: 0 when the section is just entering from the bottom,
+                // 1 once it has fully settled into place near the top of the viewport
+                const raw = (vh - rect.top) / (vh * 0.8);
+                const progress = easeOutCubic(clamp01(raw));
+
+                if (s.isFade) {{
+                    s.el.style.setProperty('--fade-opacity', progress);
+                }} else if (s.isSlideUp) {{
+                    s.el.style.setProperty('--slide-opacity', progress);
+                    s.el.style.setProperty('--slide-transform', `translateY(${{(1 - progress) * 70}}px)`);
+                }} else if (s.isZoomIn) {{
+                    s.el.style.setProperty('--zoom-opacity', progress);
+                    s.el.style.setProperty('--zoom-transform', `scale(${{0.85 + progress * 0.15}})`);
+                }} else if (s.isReveal) {{
+                    s.el.style.setProperty('--reveal-clip-path', `inset(${{(1 - progress) * 100}}% 0 0 0)`);
+                }} else if (s.isParallax) {{
+                    const scale = 1 + (1 - progress) * s.zoomScaleOffset;
+                    const translate = (1 - progress) * s.zoomTranslateOffset;
+                    s.el.style.setProperty('--parallax-transform', `scale(${{scale}}) translateY(${{translate}}%)`);
+                }} else if (s.isSplit) {{
+                    const shift = (1 - progress) * 100;
+                    if (s.splitDirection === 'horizontal') {{
+                        s.el.style.setProperty('--split-left-transform', `translateX(${{-shift}}%)`);
+                        s.el.style.setProperty('--split-right-transform', `translateX(${{shift}}%)`);
                     }} else {{
-                        section.classList.remove("is-visible");
+                        s.el.style.setProperty('--split-left-transform', `translateY(${{shift}}%)`);
+                        s.el.style.setProperty('--split-right-transform', `translateY(${{-shift}}%)`);
                     }}
-                }} else if (rect.top >= viewportHeight) {{
-                    section.style.setProperty('--reveal-progress', 0);
-                    section.classList.remove("is-visible");
-                }} else if (rect.bottom <= 0) {{
-                    section.style.setProperty('--reveal-progress', 1);
-                    section.classList.add("is-visible");
+                }} else if (s.isCurtain) {{
+                    if (s.curtainShape === 'rectangle') {{
+                        const inset = (1 - progress) * 50;
+                        s.el.style.setProperty('--curtain-clip-path', `inset(0 ${{inset}}% 0 ${{inset}}%)`);
+                    }} else if (s.curtainShape === 'diamond') {{
+                        const p = progress * 50;
+                        s.el.style.setProperty('--curtain-clip-path', `polygon(50% ${{50 - p}}%, ${{50 + p}}% 50%, 50% ${{50 + p}}%, ${{50 - p}}% 50%)`);
+                    }} else {{
+                        s.el.style.setProperty('--curtain-clip-path', `circle(${{progress * 75}}% at 50% 50%)`);
+                    }}
+                }} else if (s.isHorizontal) {{
+                    const mult = s.slideDirection === 'left-to-right' ? -1 : 1;
+                    s.el.style.setProperty('--slide-transform-state', `translateX(${{(1 - progress) * mult * 100}}%)`);
+                    s.el.style.setProperty('--slide-h-opacity', progress);
+                }} else if (s.isBleed) {{
+                    const wave = progress < 0.5 ? progress * 2 : (1 - progress) * 2;
+                    s.el.style.setProperty('--bleed-opacity', (wave * 0.85).toFixed(3));
+                    s.el.style.setProperty('--bleed-blur-val', `${{(1 - progress) * s.bleedBlurAmount + 2}}px`);
+                }} else if (s.isCube) {{
+                    const sign = s.cubeDirection === 'up' ? 1 : -1;
+                    s.el.style.setProperty('--cube-transform', `rotateX(${{sign * (1 - progress) * 45}}deg) translateZ(${{-(1 - progress) * 30}}vh)`);
+                    s.el.style.setProperty('--cube-opacity', (0.3 + progress * 0.7).toFixed(3));
+                }} else if (s.isMask) {{
+                    s.el.style.setProperty('--mask-transform', `translate(-50%, -50%) scale(${{0.5 + progress * 0.5}})`);
+                    s.el.style.setProperty('--mask-opacity', progress);
                 }}
             }});
+
             ticking = false;
         }}
-        
+
         let ticking = false;
         window.addEventListener('scroll', () => {{
             if (!ticking) {{
                 window.requestAnimationFrame(updateScroll);
                 ticking = true;
             }}
-        }});
-        
-        // Execute immediately on load to hydrate current folds view state
+        }}, {{ passive: true }});
+        window.addEventListener('resize', updateScroll);
+
+        // Hydrate the current view state immediately on load
         updateScroll();
     }});
     </script>
