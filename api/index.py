@@ -242,33 +242,38 @@ def get_base_styles():
             box-shadow: 0 -15px 35px rgba(0,0,0,0.08);
         }
         
-        /* 2. PARALLAX BACKGROUND ZOOM */
+        /* 2. PARALLAX BACKGROUND ZOOM [2] */
         section.parallax-section img {
-            transform: scale(calc(1 + (var(--reveal-progress, 0) * var(--zoom-scale-offset, 0.2)))) translateY(calc((1 - var(--reveal-progress, 0)) * var(--zoom-translate-offset, 5%)));
+            transform: var(--parallax-transform, scale(1) translateY(0));
             transform-origin: center center;
+            transition: transform var(--transition-speed, 1.2s) cubic-bezier(0.16, 1, 0.3, 1);
             will-change: transform;
         }
         
         /* 3. SPLIT SCREEN SLIDE [2] */
         section.split-section .left-half {
-            transform: translateY(calc((1 - var(--reveal-progress, 0)) * 100vh));
+            transform: var(--split-left-transform, translateY(100vh));
+            transition: transform var(--transition-speed, 1.2s) cubic-bezier(0.16, 1, 0.3, 1);
             will-change: transform;
         }
         section.split-section .right-half {
-            transform: translateY(calc((1 - var(--reveal-progress, 0)) * -100vh));
+            transform: var(--split-right-transform, translateY(-100vh));
+            transition: transform var(--transition-speed, 1.2s) cubic-bezier(0.16, 1, 0.3, 1);
             will-change: transform;
         }
         
         /* 4. CINEMATIC CURTAIN REVEAL [2] */
         section.curtain-section .page-container {
-            clip-path: var(--curtain-start, inset(0 50% 0 50%));
+            clip-path: var(--curtain-clip-path, inset(0 50% 0 50%));
+            transition: clip-path var(--transition-speed, 1.2s) cubic-bezier(0.16, 1, 0.3, 1);
             will-change: clip-path;
         }
         
         /* 5. HORIZONTAL SECTION SLIDE [2] */
         section.horizontal-section .page-container {
             transform: var(--slide-transform-state, translateX(100vw));
-            will-change: transform;
+            transition: transform var(--transition-speed, 1.2s) cubic-bezier(0.16, 1, 0.3, 1), opacity var(--transition-speed, 1.2s) ease-out;
+            will-change: transform, opacity;
         }
         
         /* 6. DYNAMIC COLOR BLEED [2] */
@@ -276,8 +281,8 @@ def get_base_styles():
             position: absolute;
             inset: 0;
             z-index: 1;
-            opacity: var(--reveal-progress, 0);
-            filter: blur(calc((1 - var(--reveal-progress, 0)) * var(--bleed-blur, 20px)));
+            opacity: var(--bleed-opacity, 0);
+            filter: blur(var(--bleed-blur-val, 20px));
             background-color: var(--bleed-color, #ff3366);
             transition: opacity var(--transition-speed, 1s) ease-out, filter var(--transition-speed, 1s) ease-out;
             will-change: opacity, filter;
@@ -289,43 +294,45 @@ def get_base_styles():
         }
         section.cube-section .page-container {
             transform-style: preserve-3d;
-            transform: rotateX(calc((1 - var(--reveal-progress, 0)) * var(--cube-rotate-deg, -45deg))) translateZ(calc((1 - var(--reveal-progress, 0)) * -30vh));
-            opacity: calc(0.3 + (var(--reveal-progress, 0) * 0.7));
+            transform: var(--cube-transform, rotateX(-45deg) translateZ(-30vh));
+            opacity: var(--cube-opacity, 0.3);
+            transition: transform var(--transition-speed, 1.2s) cubic-bezier(0.16, 1, 0.3, 1), opacity var(--transition-speed, 1.2s) ease-out;
             will-change: transform, opacity;
         }
         
         /* 8. TEXT MASK REVEAL [2] */
         section.mask-section .mask-text-element {
-            transform: scale(calc(1 + (var(--reveal-progress, 0) * (var(--mask-scale, 15) - 1))));
-            opacity: var(--reveal-progress, 0);
+            transform: var(--mask-transform, scale(0.5));
+            opacity: var(--mask-opacity, 0);
+            transition: transform var(--transition-speed, 1.2s) cubic-bezier(0.16, 1, 0.3, 1), opacity var(--transition-speed, 1.2s) ease-out;
             will-change: transform, opacity;
         }
 
         /* COMPATIBLE STATIC SCROLL TRANSITIONS */
         section.effect-fade .page-container {
-            opacity: var(--reveal-progress, 0);
+            opacity: var(--fade-opacity, 0);
+            transition: opacity var(--transition-speed, 1s) ease-out;
             will-change: opacity;
         }
 
         section.effect-slide-up .page-container {
-            opacity: var(--reveal-progress, 0);
-            transform: translateY(calc((1 - var(--reveal-progress, 0)) * var(--start-translate, 60px)));
+            opacity: var(--slide-opacity, 0);
+            transform: var(--slide-transform, translateY(60px));
+            transition: transform var(--transition-speed, 1.2s) cubic-bezier(0.16, 1, 0.3, 1), opacity var(--transition-speed, 1.2s) ease-out;
             will-change: opacity, transform;
         }
 
         section.effect-zoom-in .page-container {
-            opacity: var(--reveal-progress, 0);
-            transform: scale(calc(0.93 + (var(--reveal-progress, 0) * 0.07)));
+            opacity: var(--zoom-opacity, 0);
+            transform: var(--zoom-transform, scale(0.93));
+            transition: transform var(--transition-speed, 1.2s) cubic-bezier(0.16, 1, 0.3, 1), opacity var(--transition-speed, 1.2s) ease-out;
             will-change: opacity, transform;
         }
 
         section.effect-reveal .page-container {
-            clip-path: var(--start-clip, inset(100% 0 0 0));
+            clip-path: var(--reveal-clip-path, inset(100% 0 0 0));
             transition: clip-path var(--transition-speed, 1.2s) cubic-bezier(0.16, 1, 0.3, 1);
             will-change: clip-path;
-        }
-        section.effect-reveal.is-visible .page-container {
-            clip-path: inset(0 0 0 0) !important;
         }
 
         /* BUTTON HOVER CODES [2] */
@@ -393,39 +400,9 @@ def get_base_styles():
             background-color: rgba(255, 255, 255, 0.15); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
             color: #1e293b !important; border: 1px solid rgba(255, 255, 255, 0.3) !important; border-radius: 6px; font-weight: 600;
         }
-
-        /* ADVANCED TRANSITIONS */
-        .page-container[data-transition] {
-            transition: all var(--transition-speed, 0.9s) cubic-bezier(0.25, 1, 0.5, 1);
-            will-change: transform, opacity, clip-path;
-        }
-        html.js-enabled .page-container[data-transition="split-screen"] {
-            opacity: 1 !important; transform: none !important; clip-path: none !important;
-        }
-
-        /* Standard scroll transitions fallback layout */
-        html.js-enabled .page-container[data-transition="fade"] { opacity: 0; }
-        html.js-enabled .page-container[data-transition="fade"].is-visible { opacity: 1; }
-        
-        html.js-enabled .page-container[data-transition="slide-up"] { opacity: 0; transform: var(--start-translate, translateY(60px)); }
-        html.js-enabled .page-container[data-transition="slide-up"].is-visible { opacity: 1; transform: translateY(0); }
-        
-        html.js-enabled .page-container[data-transition="zoom-in"] { opacity: 0; transform: var(--start-translate, scale(0.93)); }
-        html.js-enabled .page-container[data-transition="zoom-in"].is-visible { opacity: 1; transform: scale(1); }
-        
-        html.js-enabled .page-container[data-transition="reveal"] { clip-path: var(--start-clip, inset(100% 0 0 0)); }
-        html.js-enabled .page-container[data-transition="reveal"].is-visible { clip-path: inset(0 0 0 0); }
-
-        /* Multi-page load animations */
-        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
-        @keyframes slideUpIn { from { opacity: 0; transform: translateY(50px); } to { opacity: 1; transform: translateY(0); } }
-        @keyframes zoomIn { from { opacity: 0; transform: scale(0.93); } to { opacity: 1; transform: scale(1); } }
-        @keyframes revealIn { from { clip-path: inset(100% 0 0 0); } to { clip-path: inset(0 0 0 0); } }
-        @keyframes clipRevealIn { from { clip-path: circle(0% at 50% 50%); } to { clip-path: circle(150% at 50% 50%); } }
-        @keyframes splitLeft { from { transform: translateY(-60px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
-        @keyframes splitRight { from { transform: translateY(60px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
-        @keyframes horizontalSnapIn { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
     """
+
+# ----------------- APP ROUTES -----------------
 
 # INDEX HOME PAGE ROUTER
 @app.route('/')
@@ -683,9 +660,9 @@ def compile_site():
                 cube_dir = custom_opts.get("cube_direction", "down")
                 css_vars.append(f"--cube-perspective: {cube_persp}")
                 if cube_dir == "down":
-                    css_vars.append("--cube-rotate-deg: -45deg")
+                    css_vars.append("--cube-start: rotateX(-45deg) translateZ(-30vh)")
                 else:
-                    css_vars.append("--cube-rotate-deg: 45deg")
+                    css_vars.append("--cube-start: rotateX(45deg) translateZ(-30vh)")
                     
             elif transition_effect == "text-mask-reveal":
                 effect_class = "mask-section"
