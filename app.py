@@ -8,7 +8,7 @@ from flask import Flask, request, render_template, redirect, url_for, flash, Res
 import fitz  # PyMuPDF
 from PIL import Image
 
-# The file is now in the root directory, so we just look for 'templates'
+# EXPLICIT ROOT PATH RESOLUTION FOR VERCEL
 template_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), 'templates'))
 app = Flask(__name__, template_folder=template_dir)
 
@@ -17,7 +17,6 @@ app.config['MAX_CONTENT_LENGTH'] = 50 * 1024 * 1024  # Limit uploads to 50MB
 
 def rects_overlap(r1, r2):
     return not (r1.x1 <= r2.x0 or r2.x1 <= r1.x0 or r1.y1 <= r2.y0 or r2.y1 <= r1.y0)
-
 
 # 1. Topic Scanner: Scores each page to locate matching website sections
 def index_document_sections(doc):
@@ -200,7 +199,7 @@ def detect_smart_button_intents(page, section_pages, is_multipage):
                 
             detected.append({"rect": rect, "href": href, "target": ""})
             
-    socials = {"facebook": "https://facebook.com", "instagram": "https://instagram.com", "twitter": "https://twitter.com", "linkedin": "https://linkedin.com", "github": "https://github.com", "youtube": "https://youtube.com"}
+    socials = {"facebook": "https://facebook.com", "indigo": "https://facebook.com", "instagram": "https://instagram.com", "twitter": "https://twitter.com", "linkedin": "https://linkedin.com", "github": "https://github.com", "youtube": "https://youtube.com"}
     for platform, url in socials.items():
         matches = page.search_for(platform)
         for rect in matches:
@@ -245,138 +244,83 @@ def get_base_styles():
         
         /* 2. PARALLAX BACKGROUND ZOOM */
         section.parallax-section img {
-            transform: scale(1.35) translateY(5%);
+            transform: scale(calc(1 + (var(--reveal-progress, 0) * var(--zoom-scale-offset, 0.2)))) translateY(calc((1 - var(--reveal-progress, 0)) * var(--zoom-translate-offset, 5%)));
             transform-origin: center center;
-            transition: transform var(--transition-speed, 1.2s) cubic-bezier(0.16, 1, 0.3, 1);
             will-change: transform;
-        }
-        section.parallax-section.is-visible img {
-            transform: scale(var(--zoom-scale, 1)) translateY(0) !important;
         }
         
-        /* 3. SPLIT SCREEN SLIDE */
+        /* 3. SPLIT SCREEN SLIDE [2] */
         section.split-section .left-half {
-            transform: var(--split-left-start, translateY(100%));
-            transition: transform var(--transition-speed, 1.2s) cubic-bezier(0.16, 1, 0.3, 1);
+            transform: translateY(calc((1 - var(--reveal-progress, 0)) * 100vh));
             will-change: transform;
-        }
-        section.split-section.is-visible .left-half {
-            transform: translateY(0) !important;
         }
         section.split-section .right-half {
-            transform: var(--split-right-start, translateY(-100%));
-            transition: transform var(--transition-speed, 1.2s) cubic-bezier(0.16, 1, 0.3, 1);
+            transform: translateY(calc((1 - var(--reveal-progress, 0)) * -100vh));
             will-change: transform;
         }
-        section.split-section.is-visible .right-half {
-            transform: translateY(0) !important;
-        }
         
-        /* 4. CINEMATIC CURTAIN REVEAL */
+        /* 4. CINEMATIC CURTAIN REVEAL [2] */
         section.curtain-section .page-container {
             clip-path: var(--curtain-start, inset(0 50% 0 50%));
-            transition: clip-path var(--transition-speed, 1.2s) cubic-bezier(0.16, 1, 0.3, 1);
             will-change: clip-path;
         }
-        section.curtain-section.is-visible .page-container {
-            clip-path: inset(0 0% 0 0%) !important;
-        }
         
-        /* 5. HORIZONTAL SECTION SLIDE */
+        /* 5. HORIZONTAL SECTION SLIDE [2] */
         section.horizontal-section .page-container {
-            transform: var(--slide-start, translateX(100%));
-            opacity: 0;
-            transition: transform var(--transition-speed, 1.2s) cubic-bezier(0.16, 1, 0.3, 1), opacity var(--transition-speed, 1.2s) ease-out;
-            will-change: transform, opacity;
-        }
-        section.horizontal-section.is-visible .page-container {
-            transform: translateX(0) !important;
-            opacity: 1 !important;
+            transform: var(--slide-transform-state, translateX(100vw));
+            will-change: transform;
         }
         
-        /* 6. DYNAMIC COLOR BLEED */
+        /* 6. DYNAMIC COLOR BLEED [2] */
         section.bleed-section .bleed-bg {
             position: absolute;
             inset: 0;
             z-index: 1;
-            opacity: 0;
-            filter: blur(var(--bleed-blur, 20px));
+            opacity: var(--reveal-progress, 0);
+            filter: blur(calc((1 - var(--reveal-progress, 0)) * var(--bleed-blur, 20px)));
             background-color: var(--bleed-color, #ff3366);
-            transition: opacity var(--transition-speed, 1s) ease-out, filter var(--transition-speed, 1s) ease-out;
             will-change: opacity, filter;
         }
-        section.bleed-section.is-visible .bleed-bg {
-            opacity: 1 !important;
-            filter: blur(0) !important;
-        }
         
-        /* 7. 3D CUBE ROTATION */
+        /* 7. 3D CUBE ROTATION [2] */
         section.cube-section {
             perspective: var(--cube-perspective, 1000px);
         }
         section.cube-section .page-container {
             transform-style: preserve-3d;
-            transform: var(--cube-start, rotateX(-45deg) translateZ(-30vh));
-            opacity: 0.3;
-            transition: transform var(--transition-speed, 1.2s) cubic-bezier(0.16, 1, 0.3, 1), opacity var(--transition-speed, 1.2s) ease-out;
+            transform: rotateX(calc((1 - var(--reveal-progress, 0)) * var(--cube-rotate-deg, -45deg))) translateZ(calc((1 - var(--reveal-progress, 0)) * -30vh));
+            opacity: calc(0.3 + (var(--reveal-progress, 0) * 0.7));
             will-change: transform, opacity;
-        }
-        section.cube-section.is-visible .page-container {
-            transform: rotateX(0deg) translateZ(0) !important;
-            opacity: 1 !important;
         }
         
-        /* 8. TEXT MASK REVEAL */
+        /* 8. TEXT MASK REVEAL [2] */
         section.mask-section .mask-text-element {
-            transform: scale(0.5);
-            opacity: 0;
-            transition: transform var(--transition-speed, 1.2s) cubic-bezier(0.16, 1, 0.3, 1), opacity var(--transition-speed, 1.2s) ease-out;
+            transform: scale(calc(1 + (var(--reveal-progress, 0) * (var(--mask-scale, 15) - 1))));
+            opacity: var(--reveal-progress, 0);
             will-change: transform, opacity;
-        }
-        section.mask-section.is-visible .mask-text-element {
-            transform: scale(var(--mask-scale, 15)) !important;
-            opacity: 1 !important;
         }
 
         /* COMPATIBLE STATIC SCROLL TRANSITIONS */
         section.effect-fade .page-container {
-            opacity: 0;
-            transition: opacity var(--transition-speed, 1s) ease-out;
+            opacity: var(--reveal-progress, 0);
             will-change: opacity;
-        }
-        section.effect-fade.is-visible .page-container {
-            opacity: 1 !important;
         }
 
         section.effect-slide-up .page-container {
-            opacity: 0;
-            transform: var(--start-translate, translateY(60px));
-            transition: transform var(--transition-speed, 1.2s) cubic-bezier(0.16, 1, 0.3, 1), opacity var(--transition-speed, 1.2s) ease-out;
+            opacity: var(--reveal-progress, 0);
+            transform: translateY(calc((1 - var(--reveal-progress, 0)) * var(--start-translate, 60px)));
             will-change: opacity, transform;
-        }
-        section.effect-slide-up.is-visible .page-container {
-            opacity: 1 !important;
-            transform: translateY(0) !important;
         }
 
         section.effect-zoom-in .page-container {
-            opacity: 0;
-            transform: var(--start-translate, scale(0.93));
-            transition: transform var(--transition-speed, 1.2s) cubic-bezier(0.16, 1, 0.3, 1), opacity var(--transition-speed, 1.2s) ease-out;
+            opacity: var(--reveal-progress, 0);
+            transform: scale(calc(0.93 + (var(--reveal-progress, 0) * 0.07)));
             will-change: opacity, transform;
-        }
-        section.effect-zoom-in.is-visible .page-container {
-            opacity: 1 !important;
-            transform: scale(1) !important;
         }
 
         section.effect-reveal .page-container {
             clip-path: var(--start-clip, inset(100% 0 0 0));
-            transition: clip-path var(--transition-speed, 1.2s) cubic-bezier(0.16, 1, 0.3, 1);
             will-change: clip-path;
-        }
-        section.effect-reveal.is-visible .page-container {
-            clip-path: inset(0 0 0 0) !important;
         }
 
         /* BUTTON HOVER CODES [2] */
@@ -477,8 +421,6 @@ def get_base_styles():
         @keyframes splitRight { from { transform: translateY(60px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
         @keyframes horizontalSnapIn { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
     """
-
-# ----------------- APP ROUTES -----------------
 
 # INDEX HOME PAGE ROUTER
 @app.route('/')
@@ -679,10 +621,11 @@ def compile_site():
                 
             elif transition_effect == "parallax-zoom":
                 effect_class = "parallax-section"
-                zoom_scale = custom_opts.get("zoom_scale", "1.2")
+                zoom_scale = float(custom_opts.get("zoom_scale", "1.2"))
                 zoom_translate = custom_opts.get("zoom_translate", "5%")
-                css_vars.append(f"--zoom-scale: {zoom_scale}")
-                css_vars.append(f"--zoom-translate: {zoom_translate}")
+                zoom_scale_offset = zoom_scale - 1.0
+                css_vars.append(f"--zoom-scale-offset: {zoom_scale_offset}")
+                css_vars.append(f"--zoom-translate-offset: {zoom_translate}")
                 
             elif transition_effect == "split-screen":
                 effect_class = "split-section"
