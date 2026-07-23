@@ -3,6 +3,8 @@ import re
 import io
 import base64
 import zipfile
+import traceback
+import html
 from flask import Flask, request, render_template, redirect, url_for, flash, Response, jsonify
 import fitz  # PyMuPDF
 from PIL import Image
@@ -14,10 +16,65 @@ app = Flask(__name__, template_folder=template_dir)
 app.secret_key = 'pdf_converter_secret_key'
 app.config['MAX_CONTENT_LENGTH'] = 50 * 1024 * 1024  # Limit uploads to 50MB
 
+ALLOWED_TRANSITIONS = {
+    'sticky-cards', 'parallax-zoom', 'split-screen', 'curtain-reveal',
+    'horizontal-slide', 'color-bleed', 'cube-rotation', 'text-mask-reveal',
+    '3d-flip', 'orbital-portal', 'fade', 'slide-up', 'zoom-in', 'reveal'
+}
+
+
+def escape_html(value):
+    return html.escape(str(value or ''), quote=True)
+
+
+def safe_href(value):
+    """Keep exported hotspots useful while excluding executable URL schemes."""
+    href = str(value or '').strip()
+    if href.startswith('#page-'):
+        return href
+    if re.match(r'^(https?://|mailto:|tel:)', href, re.IGNORECASE):
+        return href
+    return '#'
+
+
+def safe_choice(value, choices, fallback):
+    return value if value in choices else fallback
+
 def rects_overlap(r1, r2):
     return not (r1.x1 <= r2.x0 or r2.x1 <= r1.x0 or r1.y1 <= r2.y0 or r2.y1 <= r1.y0)
 
-# Helper to resolve the standard filename
+# 1. Topic Scanner: Scores each page to locate matching website sections
+def index_document_sections(doc):
+    section_pages = {
+        "home": 1,
+        "about": 1,
+        "services": 1,
+        "pricing": 1,
+        "portfolio": 1,
+        "contact": len(doc),  # Default contact to the last page
+    }
+    scores = {key: [0] * len(doc) for key in ["about", "services", "pricing", "portfolio", "contact"]}
+    
+    for page_num in range(len(doc)):
+        page = doc[page_num]
+        text = page.get_text().lower()
+        
+        for key in scores.keys():
+            count = text.count(key)
+            if key == "about" and "about us" in text: count += 5
+            if key == "contact" and "contact us" in text: count += 5
+            if key == "services" and "our services" in text: count += 5
+            if key == "pricing" and "pricing plans" in text: count += 5
+            scores[key][page_num] = count
+            
+    for key, page_scores in scores.items():
+        max_score = max(page_scores)
+        if max_score > 0:
+            section_pages[key] = page_scores.index(max_score) + 1
+            
+    return section_pages
+
+# 2. Page Filename Resolver (For Multi-page zip export)
 def get_page_filename(page_num, section_pages):
     if page_num == 1:
         return "index.html"
@@ -25,6 +82,235 @@ def get_page_filename(page_num, section_pages):
         if num == page_num and section != "home":
             return f"{section}.html"
     return f"page-{page_num}.html"
+
+# 3. Dynamic Form Field & Submit Overlays from raw placeholders
+def generate_form_fields_layer(page, page_width, page_height):
+    fields_html = []
+    try:
+        dict_data = page.get_text("dict")
+        for block in dict_data.get("blocks", []):
+            if "lines" in block:
+                for line in block["lines"]:
+                    for span in line["spans"]:
+                        text = span["text"].strip()
+                        
+                        if text.startswith("[input:") and text.endswith("]"):
+                            bbox = span["bbox"]
+                            parts = text[7:-1].split(":")
+                            if len(parts) >= 2:
+                                field_type = parts[0]  # text, email, textarea, etc.
+                                placeholder = parts[1]
+                                field_name = placeholder.lower().replace(" ", "_")
+                                
+                                left = (bbox[0] / page_width) * 100
+                                top = (bbox[1] / page_height) * 100
+                                width = ((bbox[2] - bbox[0]) / page_width) * 100
+                                height = ((bbox[3] - bbox[1]) / page_height) * 100
+                                
+                                if field_type == "textarea":
+                                    fields_html.append(f"""
+                                        <textarea name="{field_name}" placeholder="{placeholder}" required class="form-input textarea-field" style="
+                                            position: absolute; left: {left}%; top: {top}%; width: {width}%; height: {height}%; z-index: 15;
+                                        "></textarea>
+                                    """)
+                                else:
+                                    fields_html.append(f"""
+                                        <input type="{field_type}" name="{field_name}" placeholder="{placeholder}" required class="form-input input-field" style="
+                                            position: absolute; left: {left}%; top: {top}%; width: {width}%; height: {height}%; z-index: 15;
+                                        "/>
+                                    """)
+                        
+                        elif text.startswith("[submit:") and text.endswith("]"):
+                            bbox = span["bbox"]
+                            btn_text = text[8:-1]
+                            
+                            left = (bbox[0] / page_width) * 100
+                            top = (bbox[1] / page_height) * 100
+                            width = ((bbox[2] - bbox[0]) / page_width) * 100
+                            height = ((bbox[3] - bbox[1]) / page_height) * 100
+                            
+                            fields_html.append(f"""
+                                <button type="submit" class="form-submit-btn" style="
+                                    position: absolute; left: {left}%; top: {top}%; width: {width}%; height: {height}%; z-index: 15;
+                                ">{btn_text}</button>
+                            """)
+    except Exception:
+        pass
+    return "\n".join(fields_html)
+
+# 4. Extract Selectable & Searchable Transparent Text Layer [1]
+def generate_selectable_text_layer(page, page_width, page_height):
+    spans_html = []
+    try:
+        dict_data = page.get_text("dict")
+        for block in dict_data.get("blocks", []):
+            if "lines" in block:
+                for line in block["lines"]:
+                    for span in line["spans"]:
+                        text = span["text"]
+                        if text.strip().startswith("[input:") or text.strip().startswith("[submit:"):
+                            continue
+                            
+                        bbox = span["bbox"]
+                        left = (bbox[0] / page_width) * 100
+                        top = (bbox[1] / page_height) * 100
+                        width = ((bbox[2] - bbox[0]) / page_width) * 100
+                        height = ((bbox[3] - bbox[1]) / page_height) * 100
+                        font_size_pct = (span["size"] / page_width) * 100
+                        
+                        spans_html.append(f"""
+                            <span class="selectable-text" style="
+                                position: absolute; left: {left}%; top: {top}%; width: {width}%; height: {height}%;
+                                font-size: {font_size_pct}vw; line-height: 1; color: transparent; white-space: nowrap;
+                                transform-origin: left top; pointer-events: auto; user-select: text; -webkit-user-select: text;
+                            ">{text}</span>
+                        """)
+    except Exception:
+        pass
+    return "\n".join(spans_html)
+
+# 5. Extract Utility links (Raw URLs, Emails, Phones)
+def extract_utilities(page):
+    detected = []
+    text_content = page.get_text()
+    url_pattern = re.compile(r'^(https?://)?(www\.)?([a-zA-Z0-9\-]+\.)+[a-zA-Z]{2,6}(/[a-zA-Z0-9\-._~:/?#\[\]@!$&\'()*+,;=]*)?$', re.IGNORECASE)
+    email_pattern = re.compile(r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,6}$', re.IGNORECASE)
+    phone_pattern = re.compile(r'\b(?:\+?\d{1,3}[-.\s]?)?\(?\d{3}\)?[-.\s]?\d{3}[-.\s]?\d{4}\b')
+    
+    words = page.get_text("words")
+    for w in words:
+        x0, y0, x1, y1, text, _, _, _ = w
+        clean_text = text.strip().strip(",.()[]{}:;\"'!?*")
+        if len(clean_text) < 4: continue
+        
+        if url_pattern.match(clean_text) or clean_text.startswith("www.") or clean_text.startswith("http"):
+            href = clean_text if clean_text.startswith("http") else "https://" + clean_text
+            detected.append({"rect": fitz.Rect(x0, y0, x1, y1), "href": href, "target": 'target="_blank"'})
+        elif email_pattern.match(clean_text) or ("@" in clean_text and "." in clean_text):
+            detected.append({"rect": fitz.Rect(x0, y0, x1, y1), "href": f"mailto:{clean_text}", "target": ""})
+            
+    phones = phone_pattern.findall(text_content)
+    for num in set(phones):
+        rects = page.search_for(num)
+        for rect in rects:
+            detected.append({"rect": rect, "href": f"tel:{re.sub(r'[^\d+]', '', num)}", "target": ""})
+            
+    return detected
+
+# 6. Intent-to-Section Button Mapper
+def detect_smart_button_intents(page, section_pages, is_multipage):
+    detected = []
+    current_page = page.number + 1
+    intent_map = {
+        "home": "home", "welcome": "home", "back to top": "home",
+        "about us": "about", "about": "about", "who we are": "about", "our story": "about", "learn more": "about", "read more": "about",
+        "services": "services", "what we do": "services", "our services": "services", "features": "services", "shop now": "services", "shop": "services",
+        "pricing": "pricing", "plans": "pricing", "pricing plans": "pricing", "buy now": "pricing",
+        "portfolio": "portfolio", "our work": "portfolio", "projects": "portfolio",
+        "contact us": "contact", "contact": "contact", "get in touch": "contact", "email us": "contact", "get started": "contact", "register": "contact", "join now": "contact", "join": "contact", "apply now": "contact", "apply": "contact", "book now": "contact", "book a call": "contact", "subscribe": "contact", "download": "contact", "download now": "contact", "get templates": "contact"
+    }
+    
+    for phrase, target_section in intent_map.items():
+        target_page = section_pages.get(target_section)
+        if not target_page: continue
+        if current_page == target_page and current_page != 1: continue
+        
+        matches = page.search_for(phrase)
+        for rect in matches:
+            href = f"#{target_section}" if not is_multipage else get_page_filename(target_page, section_pages)
+            if not is_multipage and target_section == "home":
+                href = "#page-1"
+            elif not is_multipage:
+                href = f"#page-{target_page}"
+                
+            detected.append({"rect": rect, "href": href, "target": ""})
+            
+    socials = {"facebook": "https://facebook.com", "instagram": "https://instagram.com", "twitter": "https://twitter.com", "linkedin": "https://linkedin.com", "github": "https://github.com", "youtube": "https://youtube.com"}
+    for platform, url in socials.items():
+        matches = page.search_for(platform)
+        for rect in matches:
+            detected.append({"rect": rect, "href": url, "target": 'target="_blank"'})
+            
+    return detected
+
+# 7. Global CSS Configurations [2,3]
+def get_base_styles():
+    return """
+        :root { color-scheme: light; }
+        * { box-sizing: border-box; }
+        html { height: 100%; scroll-behavior: smooth; scroll-snap-type: y mandatory; background: #070b18; }
+        body { margin: 0; min-height: 100%; overflow-x: hidden; background: #070b18; color: #fff; font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+        .section-wrapper { min-height: 100vh; width: 100%; display: grid; place-items: center; position: relative; overflow: clip; scroll-snap-align: start; isolation: isolate; background: radial-gradient(circle at 50% 100%, #172554 0%, #0f172a 35%, #070b18 75%); padding: 2.5rem 1rem; perspective: var(--cube-perspective, 1400px); }
+        .section-wrapper::before { content: ""; position: absolute; inset: 0; z-index: -2; background: radial-gradient(circle at 15% 20%, color-mix(in srgb, var(--bleed-color, #6366f1) 30%, transparent), transparent 33%), radial-gradient(circle at 80% 75%, rgba(20, 184, 166, .14), transparent 28%); opacity: .85; }
+        .section-wrapper::after { content: ""; position: absolute; inset: 0; z-index: -1; opacity: .25; background-image: linear-gradient(rgba(255,255,255,.13) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,.13) 1px, transparent 1px); background-size: 72px 72px; mask-image: linear-gradient(to bottom, transparent, #000 22%, #000 78%, transparent); }
+        .page-container { position: relative; isolation: isolate; transform-style: preserve-3d; will-change: transform, opacity, filter, clip-path; transition: transform var(--transition-speed, .9s) cubic-bezier(.16,1,.3,1), opacity var(--transition-speed, .9s) ease, filter var(--transition-speed, .9s) ease, clip-path var(--transition-speed, .9s) cubic-bezier(.16,1,.3,1); box-shadow: 0 35px 90px rgba(0,0,0,.42), 0 0 0 1px rgba(255,255,255,.13); }
+        .page-container::before { content: ""; position: absolute; inset: -1px; z-index: -1; border-radius: inherit; background: linear-gradient(135deg, rgba(255,255,255,.65), transparent 26%, transparent 70%, rgba(99,102,241,.55)); filter: blur(12px); opacity: .32; }
+        .page-container img { -webkit-user-drag: none; }
+        .interactive-overlay { transform: translateZ(2px); }
+        .section-wrapper:not(.is-visible) .page-container[data-transition="fade"] { opacity: 0; }
+        .section-wrapper:not(.is-visible) .page-container[data-transition="slide-up"] { opacity: 0; transform: translateY(70px) scale(.96); }
+        .section-wrapper:not(.is-visible) .page-container[data-transition="zoom-in"] { opacity: 0; transform: scale(.82); filter: blur(12px); }
+        .section-wrapper:not(.is-visible) .page-container[data-transition="reveal"] { clip-path: inset(100% 0 0 0 round 20px); }
+        .section-wrapper:not(.is-visible) .page-container[data-transition="curtain-reveal"] { clip-path: polygon(50% 50%,50% 50%,50% 50%,50% 50%); }
+        .section-wrapper:not(.is-visible) .page-container[data-transition="horizontal-slide"] { opacity: 0; transform: translateX(var(--slide-distance, 120%)) rotateY(var(--slide-tilt, -14deg)); }
+        .section-wrapper:not(.is-visible) .page-container[data-transition="cube-rotation"] { opacity: 0; transform: var(--cube-start, rotateX(-58deg) rotateY(8deg) translateZ(-180px)); }
+        .section-wrapper:not(.is-visible) .page-container[data-transition="3d-flip"] { opacity: 0; transform: rotateY(var(--flip-start, 78deg)) translateZ(-130px); transform-origin: var(--flip-origin, left center); }
+        .section-wrapper:not(.is-visible) .page-container[data-transition="orbital-portal"] { opacity: 0; transform: scale(.28) rotateZ(-16deg) translateY(60px); filter: blur(15px) saturate(1.7); clip-path: circle(0 at 50% 50%); }
+        .section-wrapper.effect-sticky-cards { position: sticky; top: var(--sticky-offset, 0px); box-shadow: 0 -16px 50px rgba(0,0,0,.38); }
+        .section-wrapper.parallax-section img { animation: gentle-zoom 9s ease-in-out infinite alternate; transform-origin: center; }
+        .section-wrapper.split-section .left-half { transform: translateX(-15%); transition: transform var(--transition-speed, .9s) cubic-bezier(.16,1,.3,1); }
+        .section-wrapper.split-section .right-half { transform: translateX(15%); transition: transform var(--transition-speed, .9s) cubic-bezier(.16,1,.3,1); }
+        .section-wrapper.split-section.is-visible .left-half, .section-wrapper.split-section.is-visible .right-half { transform: translateX(0); }
+        .section-wrapper.bleed-section .bleed-bg { position: absolute; inset: -10%; z-index: -1; background: radial-gradient(circle at 50% 50%, var(--bleed-color,#6366f1), transparent 58%); filter: blur(var(--bleed-blur,35px)); opacity: 0; transform: scale(.7); transition: opacity var(--transition-speed,.9s) ease, transform var(--transition-speed,.9s) ease; }
+        .section-wrapper.bleed-section.is-visible .bleed-bg { opacity: .72; transform: scale(1.25); }
+        .mask-text-element { display: grid; place-items: center; width: 100%; height: 100%; pointer-events: none; font-size: clamp(3rem, 16vw, 14rem); color: rgba(255,255,255,.95); text-shadow: 0 0 60px rgba(129,140,248,.8); mix-blend-mode: screen; transition: transform 1.1s cubic-bezier(.16,1,.3,1), opacity .8s ease; }
+        .mask-section:not(.is-visible) .mask-text-element { transform: scale(.45); opacity: 0; }
+        .mask-section.is-visible .mask-text-element { transform: scale(var(--mask-scale, 2.1)); opacity: .15; }
+        @keyframes gentle-zoom { from { transform: scale(1); } to { transform: scale(var(--zoom-scale,1.12)) translateY(var(--zoom-translate,-1.5%)); } }
+        .pdf-link { cursor: pointer; text-decoration: none; transition: transform .3s cubic-bezier(.16,1,.3,1), box-shadow .3s ease, background-color .3s ease, filter .3s ease; transform: translateZ(8px); }
+        .pdf-link.effect-glow:hover { background: rgba(255,255,255,.14); backdrop-filter: blur(10px) brightness(1.25); box-shadow: 0 0 0 1px rgba(255,255,255,.48), 0 0 28px rgba(129,140,248,.6); border-radius: 8px; }
+        .pdf-link.effect-lift:hover { transform: translateY(-5px) translateZ(20px) scale(1.025); background: rgba(255,255,255,.08); box-shadow: 0 22px 30px -14px rgba(0,0,0,.65); border-radius: 8px; }
+        .pdf-link.effect-pulse:hover { animation: link-pulse .95s infinite alternate; background: rgba(255,255,255,.09); border-radius: 8px; }
+        @keyframes link-pulse { to { transform: scale(1.05) translateZ(16px); box-shadow: 0 0 28px rgba(34,211,238,.65); } }
+        .form-input { background: rgba(255,255,255,.92); color: #0f172a; border: 1px solid #cbd5e1; border-radius: 7px; padding: 4px 12px; font: inherit; font-size: 14px; outline: none; transition: .2s ease; }
+        .form-input:focus { border-color: #818cf8; box-shadow: 0 0 0 3px rgba(129,140,248,.28); }
+        .textarea-field { resize: none; }
+        .form-submit-btn { background: linear-gradient(135deg,#6366f1,#a855f7); color:#fff; border:0; border-radius:7px; font-weight:700; cursor:pointer; box-shadow:0 10px 22px rgba(99,102,241,.35); transition:.25s ease; }
+        .form-submit-btn:hover { transform:translateY(-3px); filter:brightness(1.1); box-shadow:0 17px 28px rgba(99,102,241,.46); }
+        .btn-style-filled { background-color:var(--btn-color,#6366f1); color:#fff!important; border:0; border-radius:8px; box-shadow:0 8px 20px rgba(0,0,0,.22); font-weight:700; }
+        .btn-style-outline { background:transparent; color:var(--btn-color,#6366f1)!important; border:2px solid var(--btn-color,#6366f1)!important; border-radius:8px; font-weight:700; }
+        .btn-style-underline { background:transparent; color:var(--btn-color,#6366f1)!important; border:0!important; border-bottom:2px solid var(--btn-color,#6366f1)!important; font-weight:700; }
+        .btn-style-glass { background:rgba(255,255,255,.18); color:#fff!important; border:1px solid rgba(255,255,255,.48)!important; border-radius:8px; backdrop-filter:blur(12px); font-weight:700; }
+        .selectable-text::selection { background:rgba(129,140,248,.38); color:transparent; }
+        @media (prefers-reduced-motion: reduce) { *,*::before,*::after { animation-duration:.01ms!important; animation-iteration-count:1!important; transition-duration:.01ms!important; scroll-behavior:auto!important; } }
+    """
+
+
+def get_runtime_script():
+    return """
+    <script>
+    (function () {
+        const sections = document.querySelectorAll('.section-wrapper');
+        if (!('IntersectionObserver' in window)) {
+            sections.forEach(section => section.classList.add('is-visible'));
+            return;
+        }
+        const observer = new IntersectionObserver((entries) => {
+            entries.forEach(({ target, isIntersecting }) => {
+                if (isIntersecting) target.classList.add('is-visible');
+            });
+        }, { threshold: 0.22, rootMargin: '0px 0px -8% 0px' });
+        sections.forEach(section => observer.observe(section));
+    }());
+    </script>
+    """
+
+# ----------------- APP ROUTES -----------------
+
+# INDEX HOME PAGE ROUTER
+@app.route('/')
+def home():
+    return render_template('index.html')
 
 # Phase 1: Heavy rendering and span extraction
 @app.route('/process', methods=['POST'])
@@ -34,10 +320,16 @@ def process_pdf():
     file = request.files['pdf_file']
     if file.filename == '':
         return jsonify({"error": "Empty filename"}), 400
+    if not file.filename.lower().endswith('.pdf'):
+        return jsonify({"error": "Please upload a PDF file."}), 400
         
     try:
         pdf_bytes = file.read()
+        if not pdf_bytes:
+            return jsonify({"error": "The uploaded PDF is empty."}), 400
         doc = fitz.open(stream=pdf_bytes, filetype="pdf")
+        if len(doc) == 0:
+            return jsonify({"error": "The uploaded PDF has no pages."}), 400
         section_pages = index_document_sections(doc)
         
         pages_data = []
@@ -71,7 +363,7 @@ def process_pdf():
                             spans.append({
                                 "text": span["text"],
                                 "bbox": span["bbox"],
-                                "font_size": span["bbox"][3] - span["bbox"][1] # Estimated font height
+                                "font_size": span["size"]  # Hydrate actual layout size
                             })
             
             # UNIFIED RUN: Process and attach all smart detected layers directly as custom_links
@@ -154,28 +446,45 @@ def process_pdf():
 @app.route('/compile', methods=['POST'])
 def compile_site():
     try:
-        data = request.get_json()
-        layout_mode = data.get('layout_mode', 'single')
-        meta_title = data.get('meta_title', 'My Smart Website')
-        meta_desc = data.get('meta_desc', '')
-        ga_id = data.get('ga_id', '').strip()
-        form_action = data.get('form_action', '').strip()
+        data = request.get_json(silent=True) or {}
+        if not isinstance(data, dict):
+            return jsonify({"error": "Export payload must be a JSON object."}), 400
+        layout_mode = safe_choice(data.get('layout_mode', 'single'), {'single', 'multipage'}, 'single')
+        meta_title = escape_html(data.get('meta_title', 'My Smart Website'))
+        meta_desc = escape_html(data.get('meta_desc', ''))
+        ga_id = re.sub(r'[^A-Za-z0-9_-]', '', str(data.get('ga_id', '')).strip())
+        form_action = safe_href(str(data.get('form_action', '')).strip())
+        if form_action == '#':
+            form_action = ''
         
         pages = data.get('pages', [])
         transitions = data.get('transitions', {})
         custom_links = data.get('custom_links', [])
+        if not isinstance(pages, list) or not pages:
+            return jsonify({"error": "No rendered PDF pages were supplied for export."}), 400
+        if not isinstance(transitions, dict):
+            transitions = {}
+        if not isinstance(custom_links, list):
+            custom_links = []
         
         # Group customized links by page index for injection during build loops
         links_by_page = {}
         for link in custom_links:
-            p = int(link["page"])
+            if not isinstance(link, dict):
+                continue
+            try:
+                p = int(link["page"])
+            except (KeyError, TypeError, ValueError):
+                continue
+            if p < 1 or p > len(pages):
+                continue
             if p not in links_by_page:
                 links_by_page[p] = []
             links_by_page[p].append(link)
             
-        section_pages = {}
-        for idx, p_data in enumerate(pages):
-            section_pages[idx + 1] = idx + 1
+        # The editor currently exports a generic page sequence. Keep the first
+        # document as index.html and use stable page-N.html names thereafter.
+        section_pages = {"home": 1}
             
         ga_script = f"""
         <script async src="https://www.googletagmanager.com/gtag/js?id={ga_id}"></script>
@@ -196,13 +505,14 @@ def compile_site():
             aspect_ratio = p_data["aspect_ratio"]
             
             # Extract configured transition variables
-            t_config = transitions.get(str(p_num))
+            t_config = transitions.get(str(p_num), transitions.get(p_num))
             if isinstance(t_config, dict):
                 transition_effect = t_config.get("effect")
                 custom_opts = t_config
             else:
                 transition_effect = t_config
                 custom_opts = {}
+            transition_effect = transition_effect if transition_effect in ALLOWED_TRANSITIONS else ''
 
             # Map custom CSS variables for scroll timelines
             css_vars = []
@@ -212,13 +522,13 @@ def compile_site():
             
             if transition_effect == "sticky-cards":
                 effect_class = "effect-sticky-cards"
-                sticky_offset = custom_opts.get("offset", "0px")
+                sticky_offset = safe_choice(custom_opts.get("offset"), {"0px", "20px", "40px", "60px"}, "0px")
                 css_vars.append(f"--sticky-offset: {sticky_offset}")
                 
             elif transition_effect == "parallax-zoom":
                 effect_class = "parallax-section"
-                zoom_scale = custom_opts.get("zoom_scale", "1.2")
-                zoom_translate = custom_opts.get("zoom_translate", "5%")
+                zoom_scale = safe_choice(custom_opts.get("zoom_scale"), {"1.06", "1.12", "1.2", "1.3"}, "1.12")
+                zoom_translate = safe_choice(custom_opts.get("zoom_translate"), {"-3%", "-1.5%", "1.5%", "3%"}, "-1.5%")
                 css_vars.append(f"--zoom-scale: {zoom_scale}")
                 css_vars.append(f"--zoom-translate: {zoom_translate}")
                 
@@ -232,7 +542,7 @@ def compile_site():
                     
             elif transition_effect == "curtain-reveal":
                 effect_class = "curtain-section"
-                curtain_shape = custom_opts.get("shape", "circle")
+                curtain_shape = safe_choice(custom_opts.get("shape"), {"circle", "rectangle", "diamond"}, "circle")
                 if curtain_shape == "circle":
                     css_vars.append("--curtain-start: circle(0% at 50% 50%)")
                 elif curtain_shape == "rectangle":
@@ -242,23 +552,26 @@ def compile_site():
                     
             elif transition_effect == "horizontal-slide":
                 effect_class = "horizontal-section"
-                slide_dir = custom_opts.get("slide_direction", "right-to-left")
+                slide_dir = safe_choice(custom_opts.get("slide_direction"), {"right-to-left", "left-to-right"}, "right-to-left")
                 if slide_dir == "right-to-left":
-                    css_vars.append("--slide-start: translateX(100%)")
+                    css_vars.append("--slide-distance: 120%")
+                    css_vars.append("--slide-tilt: -14deg")
                 else:
-                    css_vars.append("--slide-start: translateX(-100%)")
+                    css_vars.append("--slide-distance: -120%")
+                    css_vars.append("--slide-tilt: 14deg")
                     
             elif transition_effect == "color-bleed":
                 effect_class = "bleed-section"
-                color_theme = custom_opts.get("bleed_color", "indigo")
-                blur_amount = custom_opts.get("bleed_blur", "20px")
+                color_theme = safe_choice(custom_opts.get("bleed_color"), {"indigo", "emerald", "rose", "slate", "orange", "cyan"}, "indigo")
+                blur_amount = safe_choice(custom_opts.get("bleed_blur"), {"20px", "35px", "55px"}, "35px")
                 
                 colors_map = {
                     "indigo": "#4f46e5",
                     "emerald": "#059669",
                     "rose": "#e11d48",
                     "slate": "#1e293b",
-                    "orange": "#ea580c"
+                    "orange": "#ea580c",
+                    "cyan": "#0891b2"
                 }
                 theme_color = colors_map.get(color_theme, "#ff3366")
                 css_vars.append(f"--bleed-color: {theme_color}")
@@ -267,18 +580,27 @@ def compile_site():
                 
             elif transition_effect == "cube-rotation":
                 effect_class = "cube-section"
-                cube_persp = custom_opts.get("perspective", "1000px")
+                cube_persp = safe_choice(custom_opts.get("perspective"), {"800px", "1000px", "1400px", "1800px"}, "1400px")
                 cube_dir = custom_opts.get("cube_direction", "down")
                 css_vars.append(f"--cube-perspective: {cube_persp}")
                 if cube_dir == "down":
-                    css_vars.append("--cube-start: rotateX(-45deg) translateZ(-30vh)")
+                    css_vars.append("--cube-start: rotateX(-58deg) rotateY(8deg) translateZ(-180px)")
                 else:
-                    css_vars.append("--cube-start: rotateX(45deg) translateZ(-30vh)")
+                    css_vars.append("--cube-start: rotateX(58deg) rotateY(-8deg) translateZ(-180px)")
+
+            elif transition_effect == "3d-flip":
+                effect_class = "flip-section"
+                flip_direction = safe_choice(custom_opts.get("flip_direction"), {"left", "right"}, "left")
+                css_vars.append("--flip-start: 78deg" if flip_direction == "left" else "--flip-start: -78deg")
+                css_vars.append("--flip-origin: left center" if flip_direction == "left" else "--flip-origin: right center")
+
+            elif transition_effect == "orbital-portal":
+                effect_class = "portal-section"
                     
             elif transition_effect == "text-mask-reveal":
                 effect_class = "mask-section"
-                mask_title = custom_opts.get("mask_title", "DISCOVER").upper()
-                mask_scale = custom_opts.get("mask_scale", "15")
+                mask_title = escape_html(custom_opts.get("mask_title", "DISCOVER").upper())
+                mask_scale = safe_choice(str(custom_opts.get("mask_scale", "2.1")), {"1.5", "2.1", "2.8"}, "2.1")
                 css_vars.append(f"--mask-scale: {mask_scale}")
                 mask_text_html = f"""
                 <div class="mask-text-element" style="position: absolute; z-index: 20; color: #1e293b; font-weight: 900; font-family: -apple-system, sans-serif; letter-spacing: -2px;">
@@ -299,9 +621,10 @@ def compile_site():
                 effect_class = "effect-reveal"
                 css_vars.append("--start-clip: inset(100% 0 0 0)")
 
-            speed = custom_opts.get("speed", "0.9s")
+            speed = safe_choice(custom_opts.get("speed"), {"0.55s", "0.9s", "1.35s", "1.8s"}, "0.9s")
             css_vars.append(f"--transition-speed: {speed}")
             css_variables_style = "; ".join(css_vars)
+            transition_attr = f'data-transition="{transition_effect}"' if transition_effect else ''
             
             # Apply Vertical Split-screen (Clipped Columns)
             if transition_effect == "split-screen":
@@ -334,7 +657,7 @@ def compile_site():
             # Case 2: This page itself transitions using sticky cards (this page is a deck card and must stick)
             if isinstance(t_config, dict) and t_config.get("effect") == "sticky-cards":
                 is_sticky = True
-                sticky_offset = t_config.get("offset", "0px")
+                sticky_offset = safe_choice(t_config.get("offset"), {"0px", "20px", "40px", "60px"}, "0px")
             elif isinstance(t_config, str) and t_config == "sticky-cards":
                 is_sticky = True
                 sticky_offset = "0px"
@@ -350,7 +673,13 @@ def compile_site():
             link_overlays = []
             page_links = links_by_page.get(p_num, [])
             for l in page_links:
-                bbox = l["bbox"]
+                bbox = l.get("bbox", [])
+                if not isinstance(bbox, list) or len(bbox) != 4:
+                    continue
+                try:
+                    bbox = [float(value) for value in bbox]
+                except (TypeError, ValueError):
+                    continue
                 left_pct = (bbox[0] / page_width) * 100
                 top_pct = (bbox[1] / page_height) * 100
                 width_pct = ((bbox[2] - bbox[0]) / page_width) * 100
@@ -360,7 +689,7 @@ def compile_site():
                 btn_class = ""
                 btn_styles = []
                 
-                href = l["href"]
+                href = safe_href(l.get("href", "#"))
                 # Resolve scroll targets on multipage bundles
                 if is_multipage_mode and href.startswith("#page-"):
                     try:
@@ -369,12 +698,13 @@ def compile_site():
                     except Exception:
                         pass
                 
-                target_attr = 'target="_blank"' if (not href.startswith("#") and not is_multipage_mode) else ''
+                target_attr = 'target="_blank" rel="noopener noreferrer"' if re.match(r'^https?://', href, re.IGNORECASE) else ''
+                href = escape_html(href)
                 
                 if is_btn:
-                    style_type = l.get("btn_style", "filled")
-                    color_theme = l.get("btn_color", "indigo")
-                    hover_effect = l.get("hover_effect", "glow")
+                    style_type = safe_choice(l.get("btn_style"), {"filled", "outline", "underline", "glass"}, "filled")
+                    color_theme = safe_choice(l.get("btn_color"), {"indigo", "emerald", "rose", "slate", "orange", "cyan"}, "indigo")
+                    hover_effect = safe_choice(l.get("hover_effect"), {"glow", "lift", "pulse", "none"}, "glow")
                     btn_class = f"btn-style-{style_type} effect-{hover_effect}"
                     
                     colors_map = {
@@ -382,29 +712,43 @@ def compile_site():
                         "emerald": "#059669",
                         "rose": "#e11d48",
                         "slate": "#1e293b",
-                        "orange": "#ea580c"
+                        "orange": "#ea580c",
+                        "cyan": "#0891b2"
                     }
                     theme_color = colors_map.get(color_theme, "#4f46e5")
                     btn_styles.append(f"--btn-color: {theme_color};")
                 else:
-                    hover_class = f'effect-{l.get("hover_effect", "glow")}'
+                    hover_class = f'effect-{safe_choice(l.get("hover_effect"), {"glow", "lift", "pulse", "none"}, "glow")}'
                     btn_class = hover_class
                 
                 btn_styles_str = " ".join(btn_styles)
                 
                 # Check for edited text overrides
-                display_text = l.get("edited_text", "").strip()
+                display_text = escape_html(str(l.get("edited_text", "")).strip())
+                
+                # Dynamic failsafe types conversion of font_size mapping
+                f_size = l.get("font_size")
+                if f_size is None:
+                    f_size = 14
+                try:
+                    f_size = float(f_size)
+                except (TypeError, ValueError):
+                    f_size = 14
+                    
+                font_size_pct = (f_size / page_width) * 100
+                
                 if display_text:
-                    mask_bg = l.get("bg_color", "#ffffff")
+                    mask_bg = str(l.get("bg_color", "#ffffff"))
+                    if not re.match(r'^#[0-9a-fA-F]{6}$', mask_bg):
+                        mask_bg = "#ffffff"
                     # Render solid backdrop block to hide original PDF text underneath
                     mask_html = f'<div style="position: absolute; left: {left_pct}%; top: {top_pct}%; width: {width_pct}%; height: {height_pct}%; background-color: {mask_bg}; z-index: 8;"></div>'
                     link_overlays.append(mask_html)
                     
-                    font_size_pct = (l.get("font_size", 14) / page_width) * 100
                     link_overlays.append(f"""
                         <a href="{href}" {target_attr} class="pdf-link {btn_class}" style="
                             position: absolute; left: {left_pct}%; top: {top_pct}%; width: {width_pct}%; height: {height_pct}%; 
-                            z-index: 10; display: flex; align-items: center; justify-content: center; font-size: {font_size_pct}vw; {btn_styles_str}
+                            z-index: 10; display: flex; align-items: center; justify-content: center; color: #111827; font-size: {font_size_pct}vw; {btn_styles_str}
                         ">{display_text}</a>
                     """)
                 else:
@@ -418,8 +762,9 @@ def compile_site():
                     bbox = s["bbox"]
                     parts = text[7:-1].split(":")
                     if len(parts) >= 2:
-                        field_type, placeholder = parts[0], parts[1]
-                        field_name = placeholder.lower().replace(" ", "_")
+                        field_type = safe_choice(parts[0], {"text", "email", "tel", "url", "number", "password", "textarea"}, "text")
+                        placeholder = escape_html(parts[1])
+                        field_name = re.sub(r'[^a-z0-9_]', '', placeholder.lower().replace(" ", "_")) or "field"
                         
                         left = (bbox[0] / page_width) * 100
                         top = (bbox[1] / page_height) * 100
@@ -432,7 +777,7 @@ def compile_site():
                             forms_layer_html.append(f'<input type="{field_type}" name="{field_name}" placeholder="{placeholder}" required class="form-input input-field" style="position: absolute; left: {left}%; top: {top}%; width: {width}%; height: {height}%; z-index: 15;"/>')
                 elif text.startswith("[submit:") and text.endswith("]"):
                     bbox = s["bbox"]
-                    btn_text = text[8:-1]
+                    btn_text = escape_html(text[8:-1])
                     left = (bbox[0] / page_width) * 100
                     top = (bbox[1] / page_height) * 100
                     width = ((bbox[2] - bbox[0]) / page_width) * 100
@@ -449,8 +794,13 @@ def compile_site():
                 top = (bbox[1] / page_height) * 100
                 width = ((bbox[2] - bbox[0]) / page_width) * 100
                 height = ((bbox[3] - bbox[1]) / page_height) * 100
-                font_size_pct = (s.get("size", 12) / page_width) * 100
-                selectable_spans.append(f'<span class="selectable-text" style="position: absolute; left: {left}%; top: {top}%; width: {width}%; height: {height}%; font-size: {font_size_pct}vw; line-height:1; color:transparent; white-space:nowrap; transform-origin: left top; pointer-events:auto; user-select:text; -webkit-user-select:text;">{text}</span>')
+                font_size = s.get("font_size", s.get("size", 12))
+                try:
+                    font_size = float(font_size)
+                except (TypeError, ValueError):
+                    font_size = 12
+                font_size_pct = (font_size / page_width) * 100
+                selectable_spans.append(f'<span class="selectable-text" style="position: absolute; left: {left}%; top: {top}%; width: {width}%; height: {height}%; font-size: {font_size_pct}vw; line-height:1; color:transparent; white-space:nowrap; transform-origin: left top; pointer-events:auto; user-select:text; -webkit-user-select:text;">{escape_html(text)}</span>')
 
             # Render page content wrapped inside the uniform section block if single page mode
             if not is_multipage_mode:
@@ -458,7 +808,7 @@ def compile_site():
                 <section class="section-wrapper {effect_class}" style="{css_variables_style}; z-index: {p_num};">
                     {bleed_bg_html}
                     {mask_text_html}
-                    <div id="page-{p_num}" class="page-container" style="{container_style}">
+                    <div id="page-{p_num}" class="page-container" {transition_attr} style="{container_style}">
                         <div style="padding-top: {aspect_ratio}%;"></div>
                         {img_elements}
                         <div class="interactive-overlay" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%;">
@@ -470,17 +820,21 @@ def compile_site():
                 </section>
                 """
             else:
-                # Multi-page layout
+                # Multi-page layout: retain the same opening transition treatment on each file.
                 return f"""
-                <div id="page-{p_num}" class="page-container" style="position: relative; width: 100%; max-width: {page_width}px; margin: 0 auto; background: #ffffff; {animation_style}">
-                    <div style="padding-top: {aspect_ratio}%;"></div>
-                    {img_elements}
-                    <div class="interactive-overlay" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%;">
-                        {"".join(link_overlays)}
-                        {"\n".join(forms_layer_html)}
-                        {"\n".join(selectable_spans)}
+                <section class="section-wrapper {effect_class}" style="{css_variables_style};">
+                    {bleed_bg_html}
+                    {mask_text_html}
+                    <div id="page-{p_num}" class="page-container" {transition_attr} style="position: relative; width: 100%; max-width: {page_width}px; margin: 0 auto; background: #ffffff; {animation_style}">
+                        <div style="padding-top: {aspect_ratio}%;"></div>
+                        {img_elements}
+                        <div class="interactive-overlay" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%;">
+                            {"".join(link_overlays)}
+                            {"\n".join(forms_layer_html)}
+                            {"\n".join(selectable_spans)}
+                        </div>
                     </div>
-                </div>
+                </section>
                 """
         
         # EXPORT OPTION A: Single Page Compiled Output
@@ -507,6 +861,7 @@ def compile_site():
         {"".join(pages_body_html)}
     </main>
     {form_close}
+    {get_runtime_script()}
 </body>
 </html>"""
             
@@ -542,6 +897,7 @@ def compile_site():
         {page_body}
     </main>
     {form_close}
+    {get_runtime_script()}
 </body>
 </html>"""
                     zip_file.writestr(page_filename, page_html)
@@ -553,251 +909,10 @@ def compile_site():
                 headers={'Content-Disposition': f'attachment; filename="website_files.zip"'}
             )
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
-
-def get_base_styles():
-    return """
-        /* GLOBAL SETUP: SMOOTH SCROLL & SNAP */
-        html {
-            scroll-behavior: smooth;
-            scroll-snap-type: y mandatory; /* Snaps vertically */
-            overflow-y: scroll;
-            height: 100%;
-        }
-        body {
-            margin: 0; padding: 0; width: 100%; height: 100%;
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-            overflow-x: hidden;
-        }
-        
-        .section-wrapper {
-            height: 100vh;
-            width: 100vw;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            scroll-snap-align: start; /* Locks section to top */
-            position: relative;
-            overflow: hidden;
-            background-color: #ffffff;
-        }
-        
-        /* 1. CARD STACKING EFFECT [2] */
-        .section-wrapper.effect-sticky-cards {
-            position: sticky;
-            top: var(--sticky-offset, 0px);
-            box-shadow: 0 -15px 35px rgba(0,0,0,0.08);
-        }
-        
-        /* 2. PARALLAX BACKGROUND ZOOM */
-        .section-wrapper.parallax-section {
-            view-timeline-name: --zoom;
-        }
-        .section-wrapper.parallax-section img {
-            animation: zoom-in linear both;
-            animation-timeline: --zoom;
-            animation-range: entry 0% exit 100%;
-            transform-origin: center center;
-        }
-        @keyframes zoom-in {
-            from { transform: scale(1) translateY(0); }
-            to { transform: scale(var(--zoom-scale, 1.2)) translateY(var(--zoom-translate, 5%)); }
-        }
-        
-        /* 3. SPLIT SCREEN SLIDE */
-        .section-wrapper.split-section {
-            view-timeline-name: --split;
-        }
-        .section-wrapper.split-section .left-half,
-        .section-wrapper.split-section .right-half {
-            animation: split-move linear both;
-            animation-timeline: --split;
-            animation-range: entry 0% cover 100%;
-        }
-        @keyframes split-move {
-            from { transform: var(--split-start, translateY(40%)); }
-            to { transform: translateY(0); }
-        }
-        
-        /* 4. CINEMATIC CURTAIN REVEAL */
-        .section-wrapper.curtain-section {
-            view-timeline-name: --curtain;
-        }
-        .section-wrapper.curtain-section .page-container {
-            animation: curtain-open linear both;
-            animation-timeline: --curtain;
-            animation-range: entry 0% entry 100%;
-        }
-        @keyframes curtain-open {
-            from { clip-path: var(--curtain-start, inset(0 50% 0 50%)); }
-            to { clip-path: inset(0 0% 0 0%); }
-        }
-        
-        /* 5. HORIZONTAL SECTION SLIDE */
-        .section-wrapper.horizontal-section {
-            view-timeline-name: --horizontal;
-        }
-        .section-wrapper.horizontal-section .page-container {
-            animation: slide-left linear both;
-            animation-timeline: --horizontal;
-            animation-range: entry 0% entry 100%;
-        }
-        @keyframes slide-left {
-            from { transform: var(--slide-start, translateX(100%)); }
-            to { transform: translateX(0); }
-        }
-        
-        /* 6. DYNAMIC COLOR BLEED */
-        .section-wrapper.bleed-section {
-            view-timeline-name: --bleed;
-        }
-        .section-wrapper.bleed-section .bleed-bg {
-            position: absolute;
-            inset: 0;
-            z-index: 1;
-            animation: color-fade linear both;
-            animation-timeline: --bleed;
-            animation-range: entry 0% exit 50%;
-        }
-        @keyframes color-fade {
-            from { background-color: #ffffff; filter: blur(var(--bleed-blur, 20px)); opacity: 0; }
-            to { background-color: var(--bleed-color, #ff3366); filter: blur(0); opacity: 1; }
-        }
-        
-        /* 7. 3D CUBE ROTATION */
-        .cube-container {
-            perspective: var(--cube-perspective, 1000px);
-        }
-        .section-wrapper.cube-section {
-            view-timeline-name: --cube;
-            transform-style: preserve-3d;
-            animation: cube-rotate linear both;
-            animation-timeline: --cube;
-            animation-range: entry 0% exit 100%;
-        }
-        @keyframes cube-rotate {
-            from { transform: var(--cube-start, rotateX(-45deg) translateZ(-30vh)); opacity: 0.3; }
-            to { transform: rotateX(0deg) translateZ(0); opacity: 1; }
-        }
-        
-        /* 8. TEXT MASK REVEAL */
-        .section-wrapper.mask-section {
-            view-timeline-name: --mask;
-        }
-        .section-wrapper.mask-section .mask-text-element {
-            animation: text-grow linear both;
-            animation-timeline: --mask;
-            animation-range: entry 0% exit 100%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            text-align: center;
-            width: 100%;
-            pointer-events: none;
-        }
-        @keyframes text-grow {
-            from { transform: scale(1); opacity: 0; }
-            to { transform: scale(var(--mask-scale, 15)); opacity: 1; }
-        }
-
-        /* BUTTON HOVER CODES [2] */
-        .pdf-link { 
-            cursor: pointer; 
-            text-decoration: none; 
-            transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
-            transform: translateY(0) scale(1);
-        }
-        .pdf-link.effect-glow:hover { 
-            background-color: rgba(255, 255, 255, 0.12); 
-            backdrop-filter: brightness(1.15) contrast(1.05) saturate(1.1); 
-            -webkit-backdrop-filter: brightness(1.15) contrast(1.05) saturate(1.1);
-            box-shadow: 0 4px 15px rgba(255, 255, 255, 0.1);
-            border-radius: 6px;
-        }
-        .pdf-link.effect-lift:hover { 
-            transform: translateY(-3px) scale(1.02); 
-            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.12), 0 8px 10px -6px rgba(0, 0, 0, 0.12);
-            background-color: rgba(255, 255, 255, 0.08); 
-            border-radius: 6px;
-        }
-        .pdf-link.effect-pulse:hover { 
-            transform: scale(1.03);
-            background-color: rgba(255, 255, 255, 0.08); 
-            box-shadow: 0 0 10px rgba(59, 130, 246, 0.3);
-            border-radius: 6px;
-        }
-        .pdf-link:active {
-            transform: translateY(0) scale(1);
-            box-shadow: none;
-        }
-        .selectable-text::selection { background-color: rgba(59, 130, 246, 0.25); color: transparent; }
-        .selectable-text::-webkit-selection { background-color: rgba(59, 130, 246, 0.25); color: transparent; }
-        
-        /* FORM COMPONENTS */
-        .form-input {
-            background: rgba(255, 255, 255, 0.85); border: 1px solid #cbd5e1; border-radius: 4px;
-            padding: 4px 12px; font-family: inherit; font-size: 14px; outline: none; transition: all 0.2s ease-in-out;
-        }
-        .form-input:focus { border-color: #3b82f6; box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15); background: #ffffff; }
-        .textarea-field { resize: none; }
-        .form-submit-btn {
-            background: #2563eb; color: white; border: none; border-radius: 6px;
-            font-weight: 600; font-size: 14px; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
-            transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1); cursor: pointer;
-        }
-        .form-submit-btn:hover { background-color: #1d4ed8; transform: translateY(-2px); box-shadow: 0 10px 15px -3px rgba(37, 99, 235, 0.3), 0 4px 6px -2px rgba(37, 99, 235, 0.15); }
-        .form-submit-btn:active { transform: translateY(0); box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1); }
-
-        /* BUTTON STYLE TYPES */
-        .btn-style-filled {
-            background-color: var(--btn-color, #4f46e5); color: #ffffff !important; border: none; border-radius: 6px;
-            box-shadow: 0 4px 6px rgba(0,0,0,0.05); font-weight: 600; text-shadow: 0 1px 1px rgba(0,0,0,0.1);
-        }
-        .btn-style-outline {
-            background-color: transparent; color: var(--btn-color, #4f46e5) !important; border: 2px solid var(--btn-color, #4f46e5) !important;
-            border-radius: 6px; font-weight: 600;
-        }
-        .btn-style-underline {
-            background-color: transparent; color: var(--btn-color, #4f46e5) !important; border: none !important;
-            border-bottom: 2px solid var(--btn-color, #4f46e5) !important; border-radius: 0; font-weight: 600;
-        }
-        .btn-style-glass {
-            background-color: rgba(255, 255, 255, 0.15); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
-            color: #1e293b !important; border: 1px solid rgba(255, 255, 255, 0.3) !important; border-radius: 6px; font-weight: 600;
-        }
-
-        /* ADVANCED TRANSITIONS FALLBACKS (MULTIPLE AND VERTICAL FLOW CONTROLS) */
-        .page-container[data-transition] {
-            transition: all var(--transition-speed, 0.9s) cubic-bezier(0.25, 1, 0.5, 1);
-            will-change: transform, opacity, clip-path;
-        }
-        html.js-enabled .page-container[data-transition="split-screen"] {
-            opacity: 1 !important; transform: none !important; clip-path: none !important;
-        }
-
-        /* Standard scroll transitions fallback layout */
-        html.js-enabled .page-container[data-transition="fade"] { opacity: 0; }
-        html.js-enabled .page-container[data-transition="fade"].is-visible { opacity: 1; }
-        
-        html.js-enabled .page-container[data-transition="slide-up"] { opacity: 0; transform: var(--start-translate, translateY(60px)); }
-        html.js-enabled .page-container[data-transition="slide-up"].is-visible { opacity: 1; transform: translateY(0); }
-        
-        html.js-enabled .page-container[data-transition="zoom-in"] { opacity: 0; transform: var(--start-translate, scale(0.93)); }
-        html.js-enabled .page-container[data-transition="zoom-in"].is-visible { opacity: 1; transform: scale(1); }
-        
-        html.js-enabled .page-container[data-transition="reveal"] { clip-path: var(--start-clip, inset(100% 0 0 0)); }
-        html.js-enabled .page-container[data-transition="reveal"].is-visible { clip-path: inset(0 0 0 0); }
-
-        /* Multi-page load animations */
-        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
-        @keyframes slideUpIn { from { opacity: 0; transform: translateY(50px); } to { opacity: 1; transform: translateY(0); } }
-        @keyframes zoomIn { from { opacity: 0; transform: scale(0.93); } to { opacity: 1; transform: scale(1); } }
-        @keyframes revealIn { from { clip-path: inset(100% 0 0 0); } to { clip-path: inset(0 0 0 0); } }
-        @keyframes clipRevealIn { from { clip-path: circle(0% at 50% 50%); } to { clip-path: circle(150% at 50% 50%); } }
-        @keyframes splitLeft { from { transform: translateY(-60px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
-        @keyframes splitRight { from { transform: translateY(60px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
-        @keyframes horizontalSnapIn { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
-    """
+        # High fidelity traceback debugger logging
+        traceback_msg = traceback.format_exc()
+        print(traceback_msg)
+        return jsonify({"error": f"Compiler Error: {str(e)}"}), 500
 
 if __name__ == '__main__':
     app.run(debug=True, port=5000)

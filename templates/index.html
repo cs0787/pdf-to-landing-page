@@ -3,914 +3,437 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Visual PDF-to-Website Editor Studio</title>
-    <script src="https://cdn.tailwindcss.com"></script>
+    <meta name="theme-color" content="#090d1d">
+    <title>Fluxframe — PDF to web motion studio</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <style>
-        .editor-text-span:hover {
-            border-color: #3b82f6 !important;
-            background-color: rgba(59, 130, 246, 0.12) !important;
-        }
-        .editor-text-span.has-link {
-            border-color: #10b981 !important;
-            background-color: rgba(16, 185, 129, 0.08) !important;
-        }
+        :root { --ink:#ebefff; --muted:#94a0bd; --line:rgba(176,190,236,.14); --panel:rgba(18,24,49,.72); --panel-solid:#121831; --accent:#8b7cff; --cyan:#49e3e8; --rose:#fb78af; --good:#75edb1; }
+        * { box-sizing:border-box; }
+        html { min-height:100%; background:#080b16; }
+        body { min-width:320px; min-height:100vh; margin:0; overflow-x:hidden; color:var(--ink); background:#080b16; font-family:Manrope,ui-sans-serif,system-ui,sans-serif; }
+        button,input,select,textarea { font:inherit; }
+        button { cursor:pointer; }
+        .hidden { display:none!important; }
+        .ambient { position:fixed; pointer-events:none; inset:0; overflow:hidden; z-index:-1; background:radial-gradient(circle at 16% -5%,#35236d 0,transparent 27%),radial-gradient(circle at 95% 29%,rgba(0,170,191,.18) 0,transparent 20%),#080b16; }
+        .ambient::before,.ambient::after { content:""; position:absolute; border-radius:50%; filter:blur(70px); opacity:.5; animation:drift 13s ease-in-out infinite alternate; }
+        .ambient::before { width:42vw; height:42vw; top:37%; left:-15%; background:#362184; }
+        .ambient::after { width:35vw; height:35vw; right:-10%; bottom:-15%; background:#006e8e; animation-delay:-6s; }
+        @keyframes drift { to { transform:translate3d(8vw,-4vh,0) scale(1.12); } }
+        .app-header { position:sticky; top:0; z-index:30; height:74px; display:flex; align-items:center; justify-content:space-between; gap:24px; padding:0 30px; border-bottom:1px solid var(--line); background:rgba(8,11,22,.72); backdrop-filter:blur(22px); }
+        .brand { display:flex; align-items:center; gap:11px; color:#fff; font-size:18px; font-weight:800; letter-spacing:-.7px; }
+        .brand-mark { width:32px; height:32px; position:relative; display:grid; place-items:center; overflow:hidden; border:1px solid rgba(255,255,255,.4); border-radius:10px; background:linear-gradient(135deg,#ad9fff,#664be2 45%,#20c9db); box-shadow:0 0 28px rgba(139,124,255,.55); transform:rotate(-5deg); }
+        .brand-mark::after { content:""; width:13px; height:13px; border:3px solid white; border-left-color:transparent; border-bottom-color:transparent; transform:rotate(18deg); border-radius:4px; }
+        .product-pill,.tiny-pill { border:1px solid rgba(116,237,177,.25); border-radius:999px; background:rgba(47,136,94,.14); color:#8ff2be; font:500 10px/1 "DM Mono",monospace; letter-spacing:.08em; padding:6px 9px; text-transform:uppercase; }
+        .header-center { color:#8995b4; font:500 12px/1 "DM Mono",monospace; letter-spacing:.04em; }
+        .header-actions,.button-row { display:flex; align-items:center; gap:10px; }
+        .btn { min-height:38px; display:inline-flex; align-items:center; justify-content:center; gap:8px; padding:0 14px; color:#e9edff; border:1px solid var(--line); border-radius:10px; background:rgba(255,255,255,.04); font-size:12px; font-weight:700; transition:.25s cubic-bezier(.16,1,.3,1); }
+        .btn:hover { border-color:rgba(177,164,255,.62); background:rgba(139,124,255,.14); transform:translateY(-1px); }
+        .btn-primary { position:relative; overflow:hidden; color:#090917; border-color:#b1a4ff; background:linear-gradient(135deg,#c1b5ff,#8d7bff 56%,#65e1e3); box-shadow:0 8px 24px rgba(101,78,229,.34); }
+        .btn-primary::before { content:""; position:absolute; inset:0; background:linear-gradient(110deg,transparent 25%,rgba(255,255,255,.5),transparent 76%); transform:translateX(-110%); transition:.6s; }
+        .btn-primary:hover::before { transform:translateX(110%); }
+        .btn[disabled] { opacity:.55; cursor:wait; transform:none; }
+        .icon { width:16px; height:16px; stroke:currentColor; stroke-width:1.8; fill:none; stroke-linecap:round; stroke-linejoin:round; }
+
+        /* Upload experience */
+        #uploader-panel { width:min(1180px,calc(100% - 42px)); min-height:calc(100vh - 74px); display:grid; grid-template-columns:1.02fr .98fr; align-items:center; gap:72px; margin:auto; padding:72px 0; }
+        .eyebrow { display:inline-flex; align-items:center; gap:9px; margin-bottom:19px; color:#a99eff; font:500 11px/1 "DM Mono",monospace; letter-spacing:.12em; text-transform:uppercase; }
+        .eyebrow::before { content:""; width:21px; height:1px; background:currentColor; }
+        .hero-copy h1 { max-width:650px; margin:0; color:#fbfcff; font-size:clamp(42px,5.2vw,76px); line-height:1.03; letter-spacing:-.075em; }
+        .hero-copy h1 em { color:transparent; font-style:normal; background:linear-gradient(110deg,#a99dff,#66e0e6 72%,#e3d4ff); background-clip:text; -webkit-background-clip:text; }
+        .hero-copy p { max-width:570px; margin:22px 0 28px; color:#9da8c4; font-size:15px; line-height:1.72; }
+        .feature-inline { display:flex; flex-wrap:wrap; gap:12px 21px; color:#aeb8d0; font-size:12px; }
+        .feature-inline span { display:flex; align-items:center; gap:7px; }
+        .feature-inline i { width:6px; height:6px; border-radius:50%; background:var(--cyan); box-shadow:0 0 10px var(--cyan); }
+        .upload-side { position:relative; min-height:520px; display:grid; place-items:center; perspective:1200px; }
+        .orbit { position:absolute; width:430px; aspect-ratio:1; border:1px solid rgba(176,164,255,.16); border-radius:50%; transform:rotateX(64deg) rotateZ(-18deg); box-shadow:0 0 80px rgba(115,87,255,.14) inset; }
+        .orbit::after { content:""; position:absolute; width:11px; height:11px; top:32px; left:57px; border-radius:50%; background:#69e5ea; box-shadow:0 0 22px 6px #35dfe7; }
+        .orbit-two { width:316px; transform:rotateX(66deg) rotateZ(44deg); opacity:.7; animation:orbit-turn 13s linear infinite; }
+        @keyframes orbit-turn { to { transform:rotateX(66deg) rotateZ(404deg); } }
+        .upload-card { width:min(410px,100%); position:relative; z-index:2; padding:9px; border:1px solid rgba(214,223,255,.29); border-radius:24px; background:linear-gradient(145deg,rgba(255,255,255,.16),rgba(255,255,255,.035)); box-shadow:22px 30px 76px rgba(0,0,0,.48),0 0 54px rgba(105,89,248,.22); backdrop-filter:blur(22px); transform:rotateY(-10deg) rotateX(4deg); transition:transform .5s cubic-bezier(.16,1,.3,1); }
+        .upload-card:hover { transform:rotateY(-2deg) rotateX(1deg) translateY(-8px); }
+        #drop-zone { min-height:418px; position:relative; display:flex; flex-direction:column; align-items:center; justify-content:center; overflow:hidden; border:1px dashed rgba(196,189,255,.5); border-radius:17px; background:linear-gradient(145deg,rgba(16,23,50,.8),rgba(25,22,67,.75)); text-align:center; transition:.25s; }
+        #drop-zone.is-dragging { border-color:#70e5e8; background:rgba(31,54,91,.88); box-shadow:inset 0 0 0 1px rgba(112,229,232,.5),0 0 35px rgba(72,224,231,.2); }
+        #drop-zone input { position:absolute; inset:0; z-index:3; opacity:0; cursor:pointer; }
+        .drop-cube { width:110px; height:110px; position:relative; margin-bottom:23px; transform-style:preserve-3d; animation:cube-float 5s ease-in-out infinite alternate; }
+        .drop-cube span { position:absolute; inset:19px; border:1px solid rgba(208,203,255,.85); background:rgba(139,124,255,.18); box-shadow:inset 0 0 18px rgba(139,124,255,.35),0 0 20px rgba(73,227,232,.16); }
+        .drop-cube span:nth-child(1) { transform:translateZ(25px); } .drop-cube span:nth-child(2) { transform:rotateY(90deg) translateZ(25px); } .drop-cube span:nth-child(3) { transform:rotateX(90deg) translateZ(25px); }
+        .drop-cube::after { content:""; position:absolute; inset:43px 37px; border:2px solid #8ff0f0; border-top:0; border-left:0; transform:rotate(45deg) translateZ(29px); }
+        @keyframes cube-float { from { transform:rotateX(56deg) rotateZ(20deg) translateY(0); } to { transform:rotateX(36deg) rotateZ(92deg) translateY(-12px); } }
+        .drop-title { color:#f2f4ff; font-size:18px; font-weight:800; letter-spacing:-.04em; }
+        .drop-sub { margin-top:8px; color:#9ca8c8; font-size:12px; }
+        .drop-button { margin-top:24px; padding:10px 14px; color:#d8d5ff; border:1px solid rgba(193,181,255,.38); border-radius:9px; background:rgba(163,147,255,.11); font-size:11px; font-weight:800; }
+        .upload-footer { display:flex; justify-content:space-between; width:100%; padding:14px 16px 4px; color:#7782a3; font:10px/1 "DM Mono",monospace; }
+        #upload-status { min-height:418px; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:14px; color:#d9ddf5; text-align:center; }
+        .scanner { width:106px; height:134px; position:relative; overflow:hidden; border:1px solid rgba(191,184,255,.45); border-radius:10px; background:linear-gradient(135deg,#242452,#101529); }
+        .scanner::before { content:""; position:absolute; inset:14px; opacity:.6; background:repeating-linear-gradient(0deg,transparent 0 9px,rgba(170,163,255,.3) 10px 11px); }
+        .scanner::after { content:""; position:absolute; right:0; left:0; height:2px; background:#5ee2e8; box-shadow:0 0 20px 5px #5ee2e8; animation:scan 1.7s ease-in-out infinite; }
+        @keyframes scan { 0%,100% { top:12px; } 50% { top:116px; } }
+        #status-text { max-width:260px; margin:0; color:#b9c4e2; font-size:12px; line-height:1.55; }
+
+        /* Editor frame */
+        #workspace-panel { min-height:calc(100vh - 74px); display:grid; grid-template-columns:236px minmax(0,1fr) 326px; }
+        .left-rail,.inspector { position:sticky; top:74px; align-self:start; height:calc(100vh - 74px); overflow-y:auto; scrollbar-width:thin; }
+        .left-rail { padding:22px 14px; border-right:1px solid var(--line); background:rgba(11,15,31,.42); }
+        .rail-section-label,.inspector-label { display:flex; align-items:center; justify-content:space-between; padding:0 8px 12px; color:#7783a4; font:500 10px/1 "DM Mono",monospace; letter-spacing:.1em; text-transform:uppercase; }
+        .rail-section-label button { padding:0; color:#8e80fc; border:0; background:none; font:inherit; }
+        #page-rail { display:grid; gap:8px; }
+        .rail-page { display:flex; align-items:center; gap:10px; width:100%; padding:7px; color:#94a0bd; border:1px solid transparent; border-radius:10px; background:transparent; text-align:left; transition:.2s; }
+        .rail-page:hover { background:rgba(255,255,255,.04); color:#edf0ff; }
+        .rail-page.active { color:#f3f4ff; border-color:rgba(154,139,255,.36); background:linear-gradient(110deg,rgba(132,115,255,.19),rgba(49,222,229,.06)); box-shadow:inset 2px 0 0 var(--accent); }
+        .rail-thumb { width:44px; aspect-ratio:1/.72; overflow:hidden; border:1px solid rgba(255,255,255,.13); border-radius:5px; background:#202643; }
+        .rail-thumb img { width:100%; height:100%; object-fit:cover; }
+        .rail-page strong { display:block; font-size:11px; font-weight:700; }
+        .rail-page small { display:block; margin-top:2px; color:#7180a1; font:9px/1 "DM Mono",monospace; }
+        .rail-divider { height:1px; margin:22px 8px; background:var(--line); }
+        .rail-tip { margin:0 8px; padding:12px; border:1px solid rgba(73,227,232,.15); border-radius:9px; background:rgba(34,118,139,.08); color:#91a0ba; font-size:10px; line-height:1.55; }
+        .rail-tip b { color:#a9f1f2; }
+        .stage { min-width:0; padding:20px 24px 88px; }
+        .stage-toolbar { position:sticky; top:88px; z-index:10; display:flex; align-items:center; justify-content:space-between; gap:14px; width:min(940px,100%); margin:0 auto 18px; padding:10px 12px 10px 16px; border:1px solid var(--line); border-radius:13px; background:rgba(16,21,43,.7); box-shadow:0 12px 35px rgba(0,0,0,.18); backdrop-filter:blur(16px); }
+        .stage-title { display:flex; align-items:center; gap:10px; min-width:0; color:#bac5e2; font-size:11px; font-weight:700; }
+        .stage-title .live-dot { width:7px; height:7px; border-radius:50%; background:var(--good); box-shadow:0 0 12px var(--good); }
+        .stage-title strong { overflow:hidden; color:#eff1ff; text-overflow:ellipsis; white-space:nowrap; }
+        .stage-controls { display:flex; align-items:center; gap:7px; }
+        .control-button { min-height:29px; padding:0 9px; color:#9eaac6; border:1px solid transparent; border-radius:7px; background:transparent; font:500 10px/1 "DM Mono",monospace; transition:.2s; }
+        .control-button:hover,.control-button.active { color:#e9edff; border-color:rgba(163,151,255,.35); background:rgba(139,124,255,.12); }
+        #editor-workspace { width:min(940px,100%); margin:0 auto; }
+        .editor-page { position:relative; padding:34px 0 8px; scroll-margin-top:145px; }
+        .page-number { position:absolute; top:8px; left:0; display:flex; align-items:center; gap:8px; color:#74809e; font:500 10px/1 "DM Mono",monospace; letter-spacing:.05em; }
+        .page-number::before { content:""; width:17px; height:1px; background:#596681; }
+        .page-effect-badge { position:absolute; top:7px; right:0; display:flex; align-items:center; gap:5px; max-width:55%; padding:5px 8px; color:#a9b4cf; border:1px solid rgba(172,187,230,.15); border-radius:999px; background:rgba(20,27,55,.8); font:500 9px/1 "DM Mono",monospace; text-transform:uppercase; }
+        .page-effect-badge b { width:5px; height:5px; flex:0 0 auto; border-radius:50%; background:#8090ac; }
+        .page-effect-badge.has-effect { color:#b8b1ff; border-color:rgba(169,154,255,.35); background:rgba(99,85,207,.16); }
+        .page-effect-badge.has-effect b { background:#a99aff; box-shadow:0 0 8px #aa9bff; }
+        .page-frame-shell { position:relative; display:grid; place-items:center; padding:11px; border:1px solid rgba(211,219,255,.13); border-radius:20px; background:linear-gradient(155deg,rgba(255,255,255,.08),rgba(255,255,255,.015)); box-shadow:0 26px 55px rgba(0,0,0,.28); perspective:1400px; transition:.35s ease; }
+        .editor-page.selected .page-frame-shell { border-color:rgba(155,141,255,.58); box-shadow:0 0 0 1px rgba(160,147,255,.13),0 30px 65px rgba(25,12,86,.36); }
+        .page-frame { position:relative; width:100%; max-width:var(--page-max, 800px); overflow:hidden; background:white; container-type:inline-size; box-shadow:0 18px 34px rgba(0,0,0,.38); transform-style:preserve-3d; }
+        .page-frame img { position:absolute; inset:0; display:block; width:100%; height:100%; object-fit:contain; pointer-events:none; user-select:none; }
+        .editor-text-layer { position:absolute; inset:0; z-index:2; }
+        .editor-text-span { position:absolute; z-index:2; display:block; border:1px solid transparent; cursor:pointer; transition:.2s; }
+        .editor-text-span:hover { z-index:5; border-color:#61e3e8; background:rgba(73,227,232,.13); box-shadow:0 0 0 2px rgba(73,227,232,.13),0 0 20px rgba(73,227,232,.17); }
+        .editor-text-span.has-link { border-color:#a891ff; background:rgba(150,129,255,.12); }
+        .override-surface { position:absolute; inset:-1px; display:flex; align-items:center; justify-content:center; overflow:hidden; padding:0 2px; color:#10172d; text-align:center; line-height:1; white-space:nowrap; pointer-events:none; }
+        .transition-lane { position:relative; display:flex; align-items:center; justify-content:center; min-height:84px; }
+        .transition-lane::before { content:""; position:absolute; top:0; bottom:0; width:1px; background:linear-gradient(transparent,rgba(151,141,255,.6),transparent); }
+        .transition-button { position:relative; z-index:1; display:flex; align-items:center; gap:8px; min-height:31px; padding:0 12px; color:#aeb8d7; border:1px solid rgba(179,188,227,.22); border-radius:999px; background:#151b36; box-shadow:0 8px 19px rgba(0,0,0,.22); font:500 10px/1 "DM Mono",monospace; letter-spacing:.03em; transition:.25s; }
+        .transition-button:hover { color:#fff; border-color:#9b8dff; background:#252152; transform:scale(1.04); box-shadow:0 0 23px rgba(139,124,255,.28); }
+        .transition-button.configured { color:#d4ceff; border-color:rgba(168,153,255,.62); background:linear-gradient(115deg,#2a225e,#142c4b); }
+        .transition-plus { display:grid; width:16px; height:16px; place-items:center; border-radius:50%; background:rgba(255,255,255,.12); font-size:14px; }
+        .editor-page[data-effect="cube-rotation"] .page-frame.motion-play { animation:editor-cube .95s cubic-bezier(.16,1,.3,1) both; }
+        .editor-page[data-effect="3d-flip"] .page-frame.motion-play { animation:editor-flip .9s cubic-bezier(.16,1,.3,1) both; transform-origin:left center; }
+        .editor-page[data-effect="orbital-portal"] .page-frame.motion-play { animation:editor-portal 1s cubic-bezier(.16,1,.3,1) both; }
+        .editor-page[data-effect="parallax-zoom"] .page-frame.motion-play img { animation:editor-zoom 1.15s ease-out both; }
+        .editor-page[data-effect="curtain-reveal"] .page-frame.motion-play { animation:editor-curtain .95s cubic-bezier(.16,1,.3,1) both; }
+        .editor-page[data-effect="split-screen"] .page-frame.motion-play { animation:editor-split .85s cubic-bezier(.16,1,.3,1) both; }
+        .editor-page[data-effect="horizontal-slide"] .page-frame.motion-play { animation:editor-slide .85s cubic-bezier(.16,1,.3,1) both; }
+        .editor-page[data-effect="color-bleed"] .page-frame-shell.motion-play::after { content:""; position:absolute; inset:-30%; z-index:-1; border-radius:50%; background:var(--effect-color,#7c6cff); filter:blur(42px); animation:editor-bleed .9s ease both; }
+        @keyframes editor-cube { from { opacity:.2; transform:rotateX(-62deg) rotateY(12deg) translateZ(-160px); } to { opacity:1; transform:none; } }
+        @keyframes editor-flip { from { opacity:.1; transform:rotateY(82deg) translateZ(-150px); } to { opacity:1; transform:none; } }
+        @keyframes editor-portal { from { opacity:0; transform:scale(.24) rotate(-20deg) translateY(45px); filter:blur(14px) saturate(1.7); clip-path:circle(0); } to { opacity:1; transform:none; filter:none; clip-path:circle(100%); } }
+        @keyframes editor-zoom { from { transform:scale(1.22); filter:blur(7px); } to { transform:scale(1); filter:none; } }
+        @keyframes editor-curtain { from { clip-path:polygon(50% 50%,50% 50%,50% 50%,50% 50%); } to { clip-path:polygon(0 0,100% 0,100% 100%,0 100%); } }
+        @keyframes editor-split { from { clip-path:polygon(0 0,0 100%,100% 100%,100% 0); transform:scaleX(.15); opacity:.3; } to { clip-path:inset(0); transform:none; opacity:1; } }
+        @keyframes editor-slide { from { opacity:0; transform:translateX(35%) rotateY(-17deg); } to { opacity:1; transform:none; } }
+        @keyframes editor-bleed { from { opacity:0; transform:scale(.4); } to { opacity:.7; transform:scale(1); } }
+        .inspector { padding:21px 16px 45px; border-left:1px solid var(--line); background:rgba(11,15,31,.42); }
+        .inspector-tabs { display:grid; grid-template-columns:1fr 1fr 1fr; margin-bottom:17px; padding:3px; border:1px solid var(--line); border-radius:10px; background:rgba(255,255,255,.025); }
+        .inspector-tab { min-height:29px; padding:0; color:#7e8ba9; border:0; border-radius:7px; background:transparent; font:500 10px/1 "DM Mono",monospace; transition:.2s; }
+        .inspector-tab.active { color:#edefff; background:rgba(142,126,255,.2); box-shadow:0 2px 8px rgba(0,0,0,.2); }
+        .inspector-pane { display:none; } .inspector-pane.active { display:block; }
+        .setting-card { margin-bottom:13px; padding:14px; border:1px solid var(--line); border-radius:13px; background:linear-gradient(145deg,rgba(29,36,68,.6),rgba(16,21,43,.58)); }
+        .setting-card h3 { margin:0 0 4px; color:#ecf0ff; font-size:12px; font-weight:800; letter-spacing:-.02em; }
+        .setting-card p { margin:0; color:#8995b2; font-size:10px; line-height:1.55; }
+        .field { display:grid; gap:6px; margin-top:13px; }
+        .field label { color:#8793b0; font:500 9px/1 "DM Mono",monospace; letter-spacing:.08em; text-transform:uppercase; }
+        .field input,.field textarea,.field select,.modal-field input,.modal-field select { width:100%; color:#edf0ff; outline:none; border:1px solid rgba(179,190,228,.18); border-radius:8px; background:rgba(5,8,21,.44); padding:9px 10px; font-size:11px; transition:.2s; }
+        .field textarea { min-height:62px; resize:vertical; }
+        .field input:focus,.field textarea:focus,.field select:focus,.modal-field input:focus,.modal-field select:focus { border-color:#9181ff; box-shadow:0 0 0 3px rgba(139,124,255,.13); }
+        option { color:#ecf0ff; background:#171e3a; }
+        .selection-row { display:flex; align-items:center; justify-content:space-between; gap:9px; margin-top:12px; padding:10px; border:1px solid rgba(111,227,233,.17); border-radius:9px; background:rgba(29,104,129,.08); }
+        .selection-row span { color:#9ba8c7; font-size:10px; } .selection-row strong { color:#bceff0; font:500 10px/1 "DM Mono",monospace; }
+        .motion-card { position:relative; overflow:hidden; margin-top:12px; padding:12px; border:1px solid rgba(158,143,255,.24); border-radius:10px; background:linear-gradient(120deg,rgba(104,84,226,.19),rgba(23,77,102,.19)); }
+        .motion-card::after { content:""; position:absolute; width:90px; height:90px; right:-37px; bottom:-43px; border:1px solid rgba(130,229,233,.55); border-radius:50%; box-shadow:0 0 25px rgba(78,227,232,.32); }
+        .motion-card span { position:relative; z-index:1; display:block; color:#8493b7; font:500 9px/1 "DM Mono",monospace; letter-spacing:.07em; text-transform:uppercase; }
+        .motion-card strong { position:relative; z-index:1; display:block; margin:6px 0 10px; color:#f0efff; font-size:14px; letter-spacing:-.03em; }
+        .link-list { display:grid; gap:7px; margin-top:12px; max-height:290px; overflow:auto; }
+        .link-item { display:flex; align-items:center; gap:8px; padding:8px; border:1px solid rgba(172,186,226,.1); border-radius:8px; background:rgba(4,7,17,.21); }
+        .link-item .link-icon { display:grid; flex:0 0 auto; width:21px; height:21px; place-items:center; color:#a99bff; border-radius:6px; background:rgba(150,132,255,.15); font-size:11px; }
+        .link-item div { min-width:0; flex:1; } .link-item b,.link-item small { display:block; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; } .link-item b { color:#dbe0f4; font-size:10px; } .link-item small { margin-top:3px; color:#75819e; font:9px/1 "DM Mono",monospace; }
+        .link-item button { width:21px; height:21px; color:#ff9eba; border:0; border-radius:5px; background:transparent; font-size:16px; line-height:1; } .link-item button:hover { background:rgba(255,98,144,.12); }
+        .empty-links { margin-top:12px; padding:14px; color:#7885a3; border:1px dashed rgba(175,187,227,.17); border-radius:9px; font-size:10px; line-height:1.5; text-align:center; }
+        .publish-grid { display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:12px; }
+        .publish-stat { padding:10px; border:1px solid rgba(171,187,229,.12); border-radius:8px; background:rgba(8,12,26,.25); } .publish-stat b { display:block; color:#e7eaff; font-size:15px; letter-spacing:-.05em; } .publish-stat span { color:#7f8dab; font:9px/1 "DM Mono",monospace; }
+
+        /* Modal system */
+        .modal-backdrop { position:fixed; z-index:80; inset:0; display:grid; place-items:center; padding:18px; background:rgba(3,5,13,.68); backdrop-filter:blur(8px); }
+        .modal { width:min(500px,100%); max-height:calc(100vh - 36px); overflow:auto; border:1px solid rgba(204,211,255,.23); border-radius:18px; background:linear-gradient(145deg,#1a2143,#111730 68%); box-shadow:0 28px 110px rgba(0,0,0,.63),0 0 80px rgba(100,86,244,.14); }
+        .modal-head { display:flex; align-items:flex-start; justify-content:space-between; gap:16px; padding:20px 20px 15px; border-bottom:1px solid var(--line); }
+        .modal-kicker { color:#a89cff; font:500 9px/1 "DM Mono",monospace; letter-spacing:.11em; text-transform:uppercase; }
+        .modal h2 { margin:6px 0 0; color:#f5f6ff; font-size:18px; letter-spacing:-.05em; }
+        .modal-close { display:grid; flex:0 0 auto; width:28px; height:28px; place-items:center; color:#99a6c3; border:1px solid var(--line); border-radius:8px; background:rgba(255,255,255,.03); font-size:17px; }
+        .modal-body { padding:18px 20px 20px; } .modal-body > p { margin:0 0 16px; color:#94a1c1; font-size:11px; line-height:1.55; }
+        .modal-field { display:grid; gap:6px; margin-top:12px; } .modal-field label { color:#91a0c1; font:500 9px/1 "DM Mono",monospace; letter-spacing:.07em; text-transform:uppercase; }
+        .two-fields { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+        .switch-row { display:flex; align-items:center; justify-content:space-between; gap:15px; margin-top:16px; padding:11px; border:1px solid rgba(174,187,228,.12); border-radius:9px; background:rgba(4,8,19,.22); }
+        .switch-row b { display:block; color:#dfe4fa; font-size:11px; } .switch-row small { color:#7e8dab; font-size:9px; }
+        .switch { position:relative; width:34px; height:19px; flex:0 0 auto; } .switch input { width:0; height:0; opacity:0; } .switch span { position:absolute; inset:0; border-radius:99px; background:#46516b; transition:.2s; } .switch span::after { content:""; position:absolute; top:3px; left:3px; width:13px; height:13px; border-radius:50%; background:#fff; transition:.2s; } .switch input:checked+span { background:#8b7cff; } .switch input:checked+span::after { transform:translateX(15px); }
+        .effect-grid { display:grid; grid-template-columns:repeat(2,1fr); gap:8px; }
+        .effect-choice { position:relative; min-height:68px; overflow:hidden; padding:10px; color:#9ca9c7; border:1px solid rgba(177,188,230,.15); border-radius:10px; background:rgba(4,8,20,.22); text-align:left; transition:.2s; }
+        .effect-choice:hover { border-color:rgba(170,156,255,.52); transform:translateY(-1px); } .effect-choice.active { color:#f1efff; border-color:#9789ff; background:linear-gradient(135deg,rgba(117,97,244,.33),rgba(40,133,156,.2)); box-shadow:0 0 0 1px rgba(157,143,255,.1),inset 0 0 23px rgba(126,109,244,.12); }
+        .effect-choice span { position:relative; z-index:1; display:block; color:#dfe2ff; font-size:10px; font-weight:800; } .effect-choice small { position:relative; z-index:1; display:block; margin-top:4px; color:#8190b1; font-size:8px; line-height:1.25; }
+        .effect-choice i { position:absolute; right:-8px; bottom:-11px; width:47px; height:47px; border:1px solid rgba(118,225,235,.48); border-radius:50%; transform:rotateX(62deg); opacity:.6; } .effect-choice[data-effect="cube-rotation"] i,.effect-choice[data-effect="3d-flip"] i { border-radius:7px; transform:rotate(32deg); } .effect-choice[data-effect="orbital-portal"] i { box-shadow:0 0 13px rgba(99,230,235,.9),inset 0 0 13px rgba(139,124,255,.8); }
+        .modal-actions { display:flex; align-items:center; justify-content:space-between; gap:10px; margin-top:20px; padding-top:15px; border-top:1px solid var(--line); } .modal-actions .right { display:flex; gap:8px; } .text-button { padding:8px; color:#9ba8c5; border:0; background:transparent; font-size:11px; font-weight:700; } .text-button.danger { color:#ff9ab9; }
+        #toast { position:fixed; z-index:100; right:20px; bottom:20px; display:flex; align-items:center; gap:9px; max-width:360px; padding:11px 14px; color:#def7f1; border:1px solid rgba(117,237,177,.27); border-radius:10px; background:rgba(17,55,59,.92); box-shadow:0 14px 35px rgba(0,0,0,.35); font-size:11px; transform:translateY(20px); opacity:0; transition:.3s; pointer-events:none; } #toast.show { transform:none; opacity:1; } #toast::before { content:""; width:7px; height:7px; flex:0 0 auto; border-radius:50%; background:#75edb1; box-shadow:0 0 10px #75edb1; }
+        @media (max-width:1060px) { #workspace-panel { grid-template-columns:190px minmax(0,1fr); } .inspector { position:static; grid-column:1/-1; height:auto; border-top:1px solid var(--line); border-left:0; display:grid; grid-template-columns:repeat(3,1fr); gap:12px; } .inspector-tabs { display:none; } .inspector-pane { display:block!important; } .inspector-pane .setting-card { height:100%; } }
+        @media (max-width:780px) { .app-header { height:62px; padding:0 15px; } .header-center,.product-pill,.btn-words { display:none; } .app-header .btn { width:38px; padding:0; } .brand { font-size:16px; } #uploader-panel { grid-template-columns:1fr; gap:22px; padding:52px 0; } .upload-side { min-height:440px; } .hero-copy { text-align:center; } .hero-copy p { margin-inline:auto; } .eyebrow { justify-content:center; } .feature-inline { justify-content:center; } #workspace-panel { display:block; } .left-rail { position:static; width:100%; height:auto; padding:11px 15px; overflow:hidden; border-right:0; border-bottom:1px solid var(--line); } #page-rail { display:flex; overflow-x:auto; } .rail-page { flex:0 0 120px; } .rail-divider,.rail-tip { display:none; } .stage { padding:14px 12px 55px; } .stage-toolbar { top:76px; } .control-button { padding:0 6px; } .inspector { display:block; padding:15px; } .inspector-pane { display:none!important; margin-bottom:13px; } .inspector-pane.active { display:block!important; } .inspector-tabs { display:grid; } .effect-grid { grid-template-columns:1fr 1fr; } }
+        @media (prefers-reduced-motion:reduce) { *,*::before,*::after { animation-duration:.01ms!important; animation-iteration-count:1!important; transition-duration:.01ms!important; } }
     </style>
 </head>
-<body class="bg-slate-50 min-h-screen flex flex-col font-sans select-none">
-
-    <!-- HEADER / TOOLBAR -->
-    <header class="bg-white shadow-sm border-b sticky top-0 z-40">
-        <div class="max-w-7xl mx-auto px-6 py-4 flex justify-between items-center">
-            <div class="flex items-center gap-3">
-                <span class="text-xl font-black text-indigo-600 tracking-tight">PDF2Web Visual Studio</span>
-                <span class="text-xs bg-emerald-50 text-emerald-700 px-3 py-1 rounded-full font-bold">Client Editor Mode</span>
-            </div>
-            <div id="editor-actions" class="hidden flex items-center gap-4">
-                <button type="button" onclick="triggerBuild()" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold px-5 py-2 rounded-lg text-sm transition shadow shadow-indigo-200">
-                    Export Static Website
-                </button>
-            </div>
+<body>
+    <div class="ambient"></div>
+    <header class="app-header">
+        <div class="brand"><span class="brand-mark"></span><span>fluxframe</span><span class="product-pill">motion studio</span></div>
+        <div class="header-center" id="header-project">UNTITLED PROJECT / READY TO IMPORT</div>
+        <div class="header-actions">
+            <button class="btn hidden" id="new-project-btn" type="button" onclick="resetProject()" title="Start a new project"><svg class="icon" viewBox="0 0 24 24"><path d="M3 12h18M12 3v18"/></svg><span class="btn-words">New</span></button>
+            <button class="btn hidden" id="preview-button" type="button" onclick="playPreview()"><svg class="icon" viewBox="0 0 24 24"><path d="m9 18 6-6-6-6v12Z"/></svg><span class="btn-words">Play motion</span></button>
+            <button class="btn btn-primary hidden" id="export-button" type="button" onclick="triggerBuild()"><svg class="icon" viewBox="0 0 24 24"><path d="M12 3v12m0 0 4-4m-4 4-4-4M5 21h14"/></svg><span class="btn-words">Export website</span></button>
         </div>
     </header>
 
-    <!-- MAIN EDITING AREA -->
-    <main class="flex-grow flex flex-col items-center justify-center relative">
-        
-        <!-- PHASE 1: UPLOADER PANEL -->
-        <section id="uploader-panel" class="max-w-xl w-full mx-auto px-6 py-16">
-            <div class="bg-white rounded-2xl shadow-xl p-8 border border-slate-100 space-y-6">
-                <div class="text-center">
-                    <h1 class="text-2xl font-bold text-slate-800">Visual PDF to Website Studio</h1>
-                    <p class="text-sm text-slate-500 mt-1">Upload a PDF design layout from Canva or Figma. We'll load the visual assets and let you map links, transitions, and buttons directly on-screen.</p>
-                </div>
-
-                <div class="border-2 border-dashed border-slate-200 rounded-xl p-8 text-center hover:border-indigo-500 hover:bg-slate-50/50 transition cursor-pointer relative" id="drop-zone">
-                    <input type="file" id="pdf-file-input" class="absolute inset-0 opacity-0 cursor-pointer" accept=".pdf" required>
-                    <div class="space-y-3" id="drop-prompt">
-                        <svg class="mx-auto h-12 w-12 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"></path></svg>
-                        <div class="text-slate-600 font-semibold">Select or drag & drop design PDF</div>
+    <main>
+        <section id="uploader-panel">
+            <div class="hero-copy">
+                <div class="eyebrow">From static canvas to living site</div>
+                <h1>Your PDF has a <em>second dimension.</em></h1>
+                <p>Import a finished web design, make any visible text interactive, compose cinematic scroll transitions, and export a deployment-ready website in one file.</p>
+                <div class="feature-inline"><span><i></i>Editable text layers</span><span><i></i>3D scroll choreography</span><span><i></i>Standalone index.html</span></div>
+            </div>
+            <div class="upload-side">
+                <div class="orbit"></div><div class="orbit orbit-two"></div>
+                <div class="upload-card">
+                    <div id="drop-zone">
+                        <input type="file" id="pdf-file-input" accept="application/pdf,.pdf">
+                        <div id="drop-prompt"><div class="drop-cube"><span></span><span></span><span></span></div><div class="drop-title">Drop your website PDF</div><div class="drop-sub">or browse a file from your computer</div><div class="drop-button">Choose PDF · up to 50 MB</div></div>
+                        <div id="upload-status" class="hidden"><div class="scanner"></div><strong>Building your editable canvas</strong><p id="status-text">Reading pixels and text layers…</p></div>
                     </div>
-                </div>
-
-                <div id="upload-status" class="hidden text-center space-y-2">
-                    <div class="inline-block animate-spin rounded-full h-8 w-8 border-4 border-indigo-600 border-t-transparent"></div>
-                    <p class="text-sm text-slate-600 font-semibold" id="status-text">Scanning layout vectors...</p>
+                    <div class="upload-footer"><span>PDF / CANVA / FIGMA EXPORT</span><span>SECURE IN-MEMORY BUILD</span></div>
                 </div>
             </div>
         </section>
 
-        <!-- PHASE 2: INTERACTIVE WYSIWYG WORKSPACE (DYNAMIC) -->
-        <section id="workspace-panel" class="hidden w-full max-w-7xl mx-auto px-6 py-8 grid grid-cols-1 lg:grid-cols-3 gap-8">
-            
-            <!-- Canvas Preview Container (Left column) -->
-            <div class="lg:col-span-2 space-y-2" id="canvas-column">
-                <h3 class="text-xs font-bold text-slate-400 uppercase tracking-widest mb-4">Live Design Canvas</h3>
-                <div id="editor-workspace" class="space-y-0">
-                    <!-- Javascript generates preview containers here -->
-                </div>
-            </div>
+        <section id="workspace-panel" class="hidden">
+            <aside class="left-rail">
+                <div class="rail-section-label"><span>Site pages</span><button type="button" onclick="scrollToPage(selectedPage)">FOCUS</button></div>
+                <div id="page-rail"></div>
+                <div class="rail-divider"></div>
+                <div class="rail-section-label"><span>Studio tip</span></div>
+                <p class="rail-tip"><b>Click any text</b> on the canvas to rename it, turn it into a link, or make it a styled button. Select the connector between pages to choreograph the next scene.</p>
+            </aside>
 
-            <!-- Configuration & Metadata (Right Column) -->
-            <div class="space-y-6">
-                <h3 class="text-xs font-bold text-slate-400 uppercase tracking-widest">Workspace Settings</h3>
-                
-                <div class="bg-white rounded-2xl shadow-md border border-slate-100 p-6 space-y-4">
-                    <h4 class="text-sm font-bold text-slate-800 border-b pb-2">Global Metadata</h4>
-                    
-                    <div class="space-y-3">
-                        <div>
-                            <label class="block text-xs font-semibold text-slate-500">Website Meta Title</label>
-                            <input type="text" id="meta-title" value="My Custom Website" class="mt-1 block w-full rounded-lg border-slate-200 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 bg-white py-1.5 px-3 border text-xs">
-                        </div>
-                        <div>
-                            <label class="block text-xs font-semibold text-slate-500">Website Description (SEO)</label>
-                            <textarea id="meta-desc" rows="2" class="mt-1 block w-full rounded-lg border-slate-200 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 bg-white py-1.5 px-3 border text-xs resize-none"></textarea>
-                        </div>
-                        <div>
-                            <label class="block text-xs font-semibold text-slate-500">Export Structure Mode</label>
-                            <select id="layout-mode" class="mt-1 block w-full rounded-lg border-slate-200 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 bg-white py-1.5 px-3 border text-xs">
-                                <option value="single" selected>Single-Page Smooth Scrolling (.html)</option>
-                                <option value="multipage">Multi-Page Independent files (.zip directory)</option>
-                            </select>
-                        </div>
-                        <div>
-                            <label class="block text-xs font-semibold text-slate-500">Google Analytics ID</label>
-                            <input type="text" id="ga-id" placeholder="G-XXXXXXXXXX" class="mt-1 block w-full rounded-lg border-slate-200 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 bg-white py-1.5 px-3 border text-xs">
-                        </div>
-                        <div>
-                            <label class="block text-xs font-semibold text-slate-500">Forms Submission URL</label>
-                            <input type="url" id="form-action" placeholder="https://formspree.io/f/..." class="mt-1 block w-full rounded-lg border-slate-200 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 bg-white py-1.5 px-3 border text-xs">
-                        </div>
-                    </div>
-                </div>
+            <section class="stage">
+                <div class="stage-toolbar"><div class="stage-title"><i class="live-dot"></i><span>LIVE CANVAS ·</span><strong id="stage-project">Untitled project</strong></div><div class="stage-controls"><button class="control-button active" type="button" id="fit-control" onclick="setCanvasMode('fit')">FIT</button><button class="control-button" type="button" id="focus-control" onclick="setCanvasMode('focus')">FOCUS</button><button class="control-button" type="button" onclick="playPreview()">REPLAY</button></div></div>
+                <div id="editor-workspace"></div>
+            </section>
 
-                <div class="bg-white rounded-2xl shadow-md border border-slate-100 p-6 space-y-4">
-                    <h4 class="text-sm font-bold text-slate-800 border-b pb-2">Active Hotspots</h4>
-                    <div id="hotspots-list" class="text-xs text-slate-400 space-y-2 max-h-48 overflow-y-auto">
-                        No custom links or buttons mapped yet. Click on any text on the left to add one!
-                    </div>
+            <aside class="inspector">
+                <div class="inspector-tabs"><button class="inspector-tab active" data-tab="content" type="button">CONTENT</button><button class="inspector-tab" data-tab="motion" type="button">MOTION</button><button class="inspector-tab" data-tab="publish" type="button">PUBLISH</button></div>
+                <div class="inspector-pane active" data-pane="content">
+                    <div class="setting-card"><h3>Website details</h3><p>Embedded into the exported page for search and sharing.</p><div class="field"><label for="meta-title">Site title</label><input id="meta-title" value="My motion website" maxlength="120"></div><div class="field"><label for="meta-desc">Description</label><textarea id="meta-desc" maxlength="300" placeholder="A short description of this website."></textarea></div></div>
+                    <div class="setting-card"><h3>Interactive layers</h3><p>Text with an action is visible as a violet map on the canvas.</p><div class="selection-row"><span>Selected page</span><strong id="selected-page-label">PAGE 01</strong></div><div id="hotspots-list" class="link-list"></div></div>
                 </div>
-            </div>
+                <div class="inspector-pane" data-pane="motion">
+                    <div class="setting-card"><h3>Scroll choreography</h3><p>Give the page entrance an editorial moment. It is encoded directly into your export.</p><div class="motion-card"><span>Entrance for selected page</span><strong id="motion-selected-name">Page 01 · Standard scroll</strong><button class="btn" type="button" onclick="openTransitionModal(selectedPage)" style="min-height:31px;padding:0 10px;position:relative;z-index:2">Tune motion</button></div></div>
+                    <div class="setting-card"><h3>Applied transitions</h3><div id="applied-transitions" class="link-list"></div></div>
+                </div>
+                <div class="inspector-pane" data-pane="publish">
+                    <div class="setting-card"><h3>Export format</h3><p>Single-file sites carry all image data inside <code>index.html</code>.</p><div class="field"><label for="layout-mode">Website structure</label><select id="layout-mode"><option value="single">Single index.html · smooth scroll</option><option value="multipage">Multi-page ZIP bundle</option></select></div><div class="field"><label for="ga-id">Google Analytics ID <small>(optional)</small></label><input id="ga-id" placeholder="G-XXXXXXXXXX"></div><div class="field"><label for="form-action">Form endpoint <small>(optional)</small></label><input id="form-action" type="url" placeholder="https://formspree.io/f/…"></div></div>
+                    <div class="setting-card"><h3>Project readiness</h3><div class="publish-grid"><div class="publish-stat"><b id="publish-pages">0</b><span>PAGES</span></div><div class="publish-stat"><b id="publish-effects">0</b><span>MOTIONS</span></div><div class="publish-stat"><b id="publish-links">0</b><span>HOTSPOTS</span></div><div class="publish-stat"><b>HTML</b><span>OUTPUT</span></div></div><button class="btn btn-primary" style="width:100%;margin-top:13px" type="button" onclick="triggerBuild()">Compile &amp; export</button></div>
+                </div>
+            </aside>
         </section>
     </main>
 
-    <!-- FLOATING LINK CONFIGURATOR TOOLTIP -->
-    <div id="link-configurator" class="hidden absolute bg-white border border-slate-200 shadow-2xl rounded-xl p-4 z-50 w-72 space-y-3">
-        <h4 class="text-xs font-black text-slate-700 uppercase tracking-wider">Configure Element</h4>
-        
-        <!-- Editable text block overrides -->
-        <div>
-            <label class="block text-[9px] font-bold text-slate-400 uppercase">Override Text Content</label>
-            <input type="text" id="config-edited-text" placeholder="Type new button text..." class="w-full text-xs rounded border border-slate-200 py-1.5 px-2 mt-1 border">
-        </div>
-        
-        <div id="config-mask-color-panel" class="hidden">
-            <label class="block text-[9px] font-bold text-slate-400 uppercase">Mask Background Color</label>
-            <div class="flex items-center gap-2 mt-1">
-                <input type="color" id="config-bg-color" value="#ffffff" class="w-8 h-8 rounded border border-slate-200 cursor-pointer p-0.5">
-                <span class="text-[10px] text-slate-400">Covers original text underneath</span>
-            </div>
-        </div>
-
-        <div>
-            <label class="block text-[9px] font-bold text-slate-400 uppercase">Destination Type</label>
-            <select id="config-link-type" onchange="toggleLinkTargetInputs()" class="w-full text-xs rounded border border-slate-200 py-1.5 px-2 mt-1 bg-white border">
-                <option value="url">External URL (https://...)</option>
-                <option value="scroll">Scroll to Page Section</option>
-            </select>
-        </div>
-        <div>
-            <label class="block text-[9px] font-bold text-slate-400 uppercase" id="config-link-target-label">Target URL</label>
-            <input type="text" id="config-link-target-url" placeholder="https://example.com" class="w-full text-xs rounded border border-slate-200 py-1.5 px-2 mt-1 border">
-            <select id="config-link-target-scroll" class="hidden w-full text-xs rounded border border-slate-200 py-1.5 px-2 mt-1 bg-white border"></select>
-        </div>
-
-        <!-- Custom Button Styling Toggles -->
-        <div class="border-t border-slate-100 pt-2 space-y-2">
-            <div class="flex items-center justify-between">
-                <label class="text-[10px] font-bold text-slate-500 uppercase">Enable Styled Button</label>
-                <input type="checkbox" id="config-is-button" onchange="toggleButtonStyleInputs()" class="rounded border-slate-200 text-indigo-600 focus:ring-indigo-500 w-4 h-4 cursor-pointer">
-            </div>
-            
-            <div id="config-button-settings-panel" class="hidden space-y-2">
-                <div class="grid grid-cols-2 gap-2">
-                    <div>
-                        <label class="block text-[9px] font-bold text-slate-400 uppercase">Style</label>
-                        <select id="config-btn-style" class="w-full text-[10px] rounded border border-slate-200 py-1 px-1.5 mt-0.5 bg-white border">
-                            <option value="filled">Filled Box</option>
-                            <option value="outline">Outline Border</option>
-                            <option value="underline">Underline Link</option>
-                            <option value="glass">Glassmorphic</option>
-                        </select>
-                    </div>
-                    <div>
-                        <label class="block text-[9px] font-bold text-slate-400 uppercase">Color Palette</label>
-                        <select id="config-btn-color" class="w-full text-[10px] rounded border border-slate-200 py-1 px-1.5 mt-0.5 bg-white border">
-                            <option value="indigo">Indigo</option>
-                            <option value="emerald">Emerald</option>
-                            <option value="rose">Rose</option>
-                            <option value="slate">Slate (Dark)</option>
-                            <option value="orange">Orange</option>
-                        </select>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <div>
-            <label class="block text-[9px] font-bold text-slate-400 uppercase">Hover Effect Style</label>
-            <select id="config-hover-effect" class="w-full text-xs rounded border border-slate-200 py-1.5 px-2 mt-1 bg-white border">
-                <option value="glow">Glassmorphic Glow (Lights up Underlying Image)</option>
-                <option value="lift">3D Float Lift (Slides Up + Soft Shadow)</option>
-                <option value="pulse">Soft Pulse (Gently scales up)</option>
-                <option value="none">No Effect (Standard clean hotspot)</option>
-            </select>
-        </div>
-        <div class="flex justify-end gap-2 text-xs pt-1 border-t border-slate-50">
-            <button type="button" id="config-delete-btn" onclick="deleteActiveLink()" class="hidden text-rose-600 hover:text-rose-800 font-semibold px-2">Remove</button>
-            <button type="button" onclick="closeLinkModal()" class="text-slate-500 hover:text-slate-700 font-semibold px-2">Cancel</button>
-            <button type="button" onclick="saveActiveLink()" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold px-3 py-1 rounded">Save</button>
-        </div>
+    <div class="modal-backdrop hidden" id="link-modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="link-modal-title">
+        <div class="modal"><div class="modal-head"><div><div class="modal-kicker">Text & interaction</div><h2 id="link-modal-title">Configure layer</h2></div><button type="button" class="modal-close" onclick="closeLinkModal()">×</button></div><div class="modal-body"><p id="selected-text-preview">Select a piece of PDF text to configure it.</p><div class="modal-field"><label for="config-edited-text">Visible text</label><input id="config-edited-text" placeholder="Keep the text as designed"></div><div class="two-fields"><div class="modal-field"><label for="config-bg-color">Mask color</label><input id="config-bg-color" type="color" value="#ffffff"></div><div class="modal-field"><label for="config-hover-effect">Hover feel</label><select id="config-hover-effect"><option value="glow">Ambient glow</option><option value="lift">3D lift</option><option value="pulse">Soft pulse</option><option value="none">No effect</option></select></div></div><div class="switch-row"><div><b>Make this clickable</b><small>Route to an external URL or another page.</small></div><label class="switch"><input id="config-action-enabled" type="checkbox"><span></span></label></div><div id="link-target-fields"><div class="modal-field"><label for="config-link-type">Destination</label><select id="config-link-type"><option value="url">External URL</option><option value="scroll">Scroll to a page</option></select></div><div class="modal-field" id="url-target-field"><label for="config-link-target-url">Target URL</label><input id="config-link-target-url" type="url" placeholder="https://example.com"></div><div class="modal-field hidden" id="scroll-target-field"><label for="config-link-target-scroll">Target page</label><select id="config-link-target-scroll"></select></div></div><div class="switch-row"><div><b>Present as a button</b><small>Apply a visual button treatment.</small></div><label class="switch"><input id="config-is-button" type="checkbox"><span></span></label></div><div id="button-settings" class="two-fields hidden"><div class="modal-field"><label for="config-btn-style">Button style</label><select id="config-btn-style"><option value="filled">Filled</option><option value="outline">Outline</option><option value="glass">Glass</option><option value="underline">Underline</option></select></div><div class="modal-field"><label for="config-btn-color">Color</label><select id="config-btn-color"><option value="indigo">Indigo</option><option value="cyan">Cyan</option><option value="emerald">Emerald</option><option value="rose">Rose</option><option value="orange">Orange</option><option value="slate">Slate</option></select></div></div><div class="modal-actions"><button type="button" id="config-delete-btn" class="text-button danger hidden" onclick="deleteActiveLink()">Remove layer</button><div class="right"><button type="button" class="text-button" onclick="closeLinkModal()">Cancel</button><button type="button" class="btn btn-primary" onclick="saveActiveLink()">Save layer</button></div></div></div></div>
     </div>
 
-    <!-- FLOATING TRANSITION SELECTOR TOOLTIP (UPGRADED WITH DYNAMIC CUSTOM OPTIONS FOR TIMELINE EFFECTS) -->
-    <div id="transition-configurator" class="hidden absolute bg-white border border-slate-200 shadow-2xl rounded-xl p-4 z-50 w-72 space-y-3">
-        <h4 class="text-xs font-black text-slate-700 uppercase tracking-wider">Page Scroll Transition</h4>
-        <p class="text-[10px] text-slate-400">Choose the transition effect when sliding into this section.</p>
-        <div>
-            <select id="transition-effect-select" onchange="showCustomTransitionOptions(this.value)" class="w-full text-xs rounded border border-slate-200 py-1.5 px-2 bg-white border">
-                <option value="">No Transition (Standard scroll)</option>
-                <option value="sticky-cards">1. Sticky Stacking Cards (Section locks while next slides over)</option>
-                <option value="parallax-zoom">2. Parallax Background Zoom (BG zooms in smoothly on enter)</option>
-                <option value="split-screen">3. Vertical Split-Screen (Left half slides up / Right slides down)</option>
-                <option value="curtain-reveal">4. Cinematic Curtain Reveal (Expands from center curtain-wipe)</option>
-                <option value="horizontal-slide">5. Horizontal Section Slide (Slides left-to-right as you scroll)</option>
-                <option value="color-bleed">6. Dynamic Color Bleed (Theme color bleeds in smoothly)</option>
-                <option value="cube-rotation">7. 3D Cube Rotation (Tumbling 3D box face rotation)</option>
-                <option value="text-mask-reveal">8. Text Mask Reveal (Focal title scales up to reveal next page)</option>
-            </select>
-        </div>
-        
-        <!-- Dynamic transition customization parameters placeholder -->
-        <div id="transition-custom-options" class="space-y-3">
-            <!-- Populated via Javascript -->
-        </div>
-
-        <div class="flex justify-end gap-2 text-xs pt-1 border-t border-slate-50">
-            <button type="button" onclick="closeTransitionModal()" class="text-slate-500 hover:text-slate-700 font-semibold px-2">Cancel</button>
-            <button type="button" onclick="saveTransition()" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold px-3 py-1 rounded">Apply</button>
-        </div>
+    <div class="modal-backdrop hidden" id="transition-modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="transition-modal-title">
+        <div class="modal"><div class="modal-head"><div><div class="modal-kicker">Scroll choreography</div><h2 id="transition-modal-title">Choose an entrance</h2></div><button type="button" class="modal-close" onclick="closeTransitionModal()">×</button></div><div class="modal-body"><p>Motion is applied when this page enters the reader’s viewport. Every option works offline in the final export.</p><div class="effect-grid" id="effect-grid"></div><div id="transition-custom-options"></div><div class="modal-actions"><button type="button" id="clear-transition-btn" class="text-button danger" onclick="clearTransition()">Clear motion</button><div class="right"><button type="button" class="text-button" onclick="closeTransitionModal()">Cancel</button><button type="button" class="btn btn-primary" onclick="saveTransition()">Apply motion</button></div></div></div></div>
     </div>
+    <div id="toast" role="status"></div>
 
-    <footer class="bg-slate-100 border-t py-6 text-center text-xs text-slate-400">
-        <p>© 2026 PDF2Web Studio. Built for lightning-fast serverless conversions.</p>
-    </footer>
-
-    <!-- INTERACTIVE WORKSPACE ENGINE -->
     <script>
-        let pdfData = null;  // Holds page payloads in memory
-        let customLinks = []; // Holds user custom hotspot links
-        let transitions = {}; // Holds transitions mapped "page": configurationObject
-        let activeSpan = null; // Active span being configured
-        let activeTransitionTarget = null; // Target page receiving transition config
+        let pdfData = [];
+        let customLinks = [];
+        let transitions = {};
+        let activeSpan = null;
+        let activeTransitionTarget = null;
+        let selectedPage = 1;
+        let selectedEffect = '';
+        let toastTimer = null;
+
+        const effects = {
+            '': { name:'Standard scroll', note:'Clean, native scrolling' },
+            'sticky-cards': { name:'Stacking cards', note:'Depth and overlap' },
+            'parallax-zoom': { name:'Parallax zoom', note:'Slow camera push' },
+            'split-screen': { name:'Split reveal', note:'Two halves assemble' },
+            'curtain-reveal': { name:'Curtain reveal', note:'Cinematic aperture' },
+            'horizontal-slide': { name:'Side glide', note:'Tilted lateral entry' },
+            'color-bleed': { name:'Color bloom', note:'Ambient color wash' },
+            'cube-rotation': { name:'3D cube', note:'Tumbling depth entry' },
+            '3d-flip': { name:'3D flip', note:'Card face rotation' },
+            'orbital-portal': { name:'Orbital portal', note:'Scale through light' },
+            'text-mask-reveal': { name:'Type mask', note:'Oversized type reveal' },
+            'fade': { name:'Soft fade', note:'Minimal opacity entrance' },
+            'slide-up': { name:'Rise in', note:'Editorial vertical lift' },
+            'zoom-in': { name:'Focus zoom', note:'Lens-like arrival' },
+            'reveal': { name:'Wipe reveal', note:'Vertical page wipe' }
+        };
+        const effectChoices = ['sticky-cards','parallax-zoom','split-screen','curtain-reveal','horizontal-slide','color-bleed','cube-rotation','3d-flip','orbital-portal','text-mask-reveal'];
 
         const fileInput = document.getElementById('pdf-file-input');
+        const dropZone = document.getElementById('drop-zone');
         const uploadStatus = document.getElementById('upload-status');
         const statusText = document.getElementById('status-text');
-        const dropZone = document.getElementById('drop-zone');
 
-        fileInput.addEventListener('change', (e) => {
-            if (fileInput.files.length > 0) {
-                handleUpload(fileInput.files[0]);
-            }
-        });
+        fileInput.addEventListener('change', event => { if (event.target.files[0]) handleUpload(event.target.files[0]); });
+        ['dragenter', 'dragover'].forEach(eventName => dropZone.addEventListener(eventName, event => { event.preventDefault(); dropZone.classList.add('is-dragging'); }));
+        ['dragleave', 'drop'].forEach(eventName => dropZone.addEventListener(eventName, event => { event.preventDefault(); dropZone.classList.remove('is-dragging'); }));
+        dropZone.addEventListener('drop', event => { const file = event.dataTransfer.files[0]; if (file) handleUpload(file); });
+        document.querySelectorAll('.inspector-tab').forEach(button => button.addEventListener('click', () => setInspectorTab(button.dataset.tab)));
+        document.getElementById('config-link-type').addEventListener('change', toggleLinkTargetInputs);
+        document.getElementById('config-action-enabled').addEventListener('change', toggleLinkTargetInputs);
+        document.getElementById('config-is-button').addEventListener('change', toggleButtonSettings);
+        document.getElementById('config-edited-text').addEventListener('input', () => { if (activeSpan) refreshEditorOverlays(); });
+        document.querySelectorAll('.modal-backdrop').forEach(backdrop => backdrop.addEventListener('click', event => { if (event.target === backdrop) { closeLinkModal(); closeTransitionModal(); } }));
+        document.addEventListener('keydown', event => { if (event.key === 'Escape') { closeLinkModal(); closeTransitionModal(); } });
 
-        // Drag & drop handlers
-        ['dragenter', 'dragover'].forEach(eventName => {
-            dropZone.addEventListener(eventName, () => dropZone.classList.add('border-indigo-500', 'bg-indigo-50/50'), false);
-        });
-        ['dragleave', 'drop'].forEach(eventName => {
-            dropZone.addEventListener(eventName, () => dropZone.classList.remove('border-indigo-500', 'bg-indigo-50/50'), false);
-        });
-        dropZone.addEventListener('drop', (e) => {
-            e.preventDefault();
-            if (e.dataTransfer.files.length > 0) {
-                handleUpload(e.dataTransfer.files[0]);
-            }
-        });
-
-        // Phase 1: Upload and scan PDF
-        function handleUpload(file) {
-            dropZone.classList.add('hidden');
-            uploadStatus.classList.remove('hidden');
-            statusText.textContent = "Uploading PDF document...";
-            
-            const formData = new FormData();
-            formData.append('pdf_file', file);
-            
-            statusText.textContent = "Extracting layout, selectable text & rendering graphics...";
-            
-            fetch('/process', {
-                method: 'POST',
-                body: formData
-            })
-            .then(res => res.json())
-            .then(data => {
-                if (data.error) {
-                    alert(data.error);
-                    resetUploader();
-                } else {
-                    pdfData = data.pages;
-                    
-                    // HYDRATION: Automatically ingest server-detected links into editor canvas state
-                    customLinks = data.auto_links || [];
-                    updateHotspotsList();
-                    
-                    document.getElementById('uploader-panel').classList.add('hidden');
-                    document.getElementById('workspace-panel').classList.remove('hidden');
-                    document.getElementById('editor-actions').classList.remove('hidden');
-                    buildEditor(data.pages);
-                    populatePageSelectScroll();
-                }
-            })
-            .catch(err => {
-                alert("Failed to process document: " + err);
-                resetUploader();
-            });
+        async function handleUpload(file) {
+            if (!file || !(/\.pdf$/i.test(file.name) || file.type === 'application/pdf')) { showToast('Choose a PDF file to begin.'); return; }
+            if (file.size > 50 * 1024 * 1024) { showToast('This PDF is over the 50 MB project limit.'); return; }
+            document.getElementById('drop-prompt').classList.add('hidden'); uploadStatus.classList.remove('hidden');
+            statusText.textContent = 'Extracting page images, text layers, and smart links…';
+            const formData = new FormData(); formData.append('pdf_file', file);
+            try {
+                const response = await fetch('/process', { method:'POST', body:formData });
+                const data = await response.json();
+                if (!response.ok || data.error) throw new Error(data.error || 'The PDF could not be processed.');
+                pdfData = data.pages || []; customLinks = data.auto_links || []; transitions = {}; selectedPage = 1;
+                if (!pdfData.length) throw new Error('No pages could be found in this PDF.');
+                const title = file.name.replace(/\.pdf$/i, '').replace(/[-_]+/g, ' ').trim();
+                document.getElementById('meta-title').value = title || 'My motion website';
+                document.getElementById('stage-project').textContent = title || 'Untitled project';
+                document.getElementById('header-project').textContent = `${String(pdfData.length).padStart(2,'0')} PAGES / EDITABLE CANVAS READY`;
+                document.getElementById('uploader-panel').classList.add('hidden'); document.getElementById('workspace-panel').classList.remove('hidden');
+                document.getElementById('new-project-btn').classList.remove('hidden'); document.getElementById('preview-button').classList.remove('hidden'); document.getElementById('export-button').classList.remove('hidden');
+                buildEditor(); populateScrollTargets(); refreshAllPanels(); showToast('Canvas ready — click text or a connector to begin.');
+            } catch (error) { document.getElementById('drop-prompt').classList.remove('hidden'); uploadStatus.classList.add('hidden'); fileInput.value = ''; showToast(error.message || 'Unable to process this PDF.'); }
         }
 
-        function resetUploader() {
-            dropZone.classList.remove('hidden');
-            uploadStatus.classList.add('hidden');
-            fileInput.value = '';
-        }
-
-        // Phase 2: Construct the interactive workspace canvas
-        function buildEditor(pages) {
-            const workspace = document.getElementById('editor-workspace');
-            workspace.innerHTML = '';
-            
-            pages.forEach((page, index) => {
-                // Page block container
-                const pageContainer = document.createElement('div');
-                pageContainer.className = 'editor-page-container relative border border-slate-200 bg-white shadow-sm';
-                pageContainer.style.width = '100%';
-                pageContainer.style.maxWidth = `${page.width}px`;
-                pageContainer.style.margin = '0 auto';
-                
-                // Aspect Ratio Spacer
-                const spacer = document.createElement('div');
-                spacer.style.paddingTop = `${page.aspect_ratio}%`;
-                pageContainer.appendChild(spacer);
-                
-                // Base HD Layout webp image
-                const img = document.createElement('img');
-                img.src = page.image;
-                img.className = 'absolute top-0 left-0 w-full h-full block pointer-events-none';
-                pageContainer.appendChild(img);
-                
-                // Text selection bounding box layers [1]
-                const textLayer = document.createElement('div');
-                textLayer.className = 'absolute top-0 left-0 w-full h-full';
-                
-                page.spans.forEach(span => {
-                    const textSpan = document.createElement('div');
-                    textSpan.className = 'editor-text-span absolute border border-transparent transition cursor-pointer text-transparent select-none';
-                    
-                    const left = (span.bbox[0] / page.width) * 100;
-                    const top = (span.bbox[1] / page.height) * 100;
-                    const width = ((span.bbox[2] - span.bbox[0]) / page.width) * 100;
-                    const height = ((span.bbox[3] - span.bbox[1]) / page.height) * 100;
-                    
-                    textSpan.style.left = `${left}%`;
-                    textSpan.style.top = `${top}%`;
-                    textSpan.style.width = `${width}%`;
-                    textSpan.style.height = `${height}%`;
-                    
-                    textSpan.dataset.text = span.text;
-                    textSpan.dataset.pageNum = page.number;
-                    textSpan.dataset.font_size = span.font_size;
-                    textSpan.dataset.bbox = JSON.stringify(span.bbox);
-                    
-                    // Highlight the bounding box if it already contains an auto-detected or saved link
-                    const existing = findCustomLink(page.number, span.bbox);
-                    if (existing) {
-                        textSpan.classList.add('has-link');
-                    }
-                    
-                    textSpan.addEventListener('click', (e) => openLinkModal(textSpan, e));
-                    
-                    textLayer.appendChild(textSpan);
+        function buildEditor() {
+            const workspace = document.getElementById('editor-workspace'); workspace.innerHTML = '';
+            pdfData.forEach((page, index) => {
+                const section = document.createElement('article'); section.className = 'editor-page'; section.id = `editor-page-${page.number}`; section.dataset.page = page.number;
+                const transition = getTransition(page.number); section.dataset.effect = transition.effect || '';
+                section.innerHTML = `<div class="page-number">PAGE ${String(page.number).padStart(2,'0')}</div><div class="page-effect-badge ${transition.effect ? 'has-effect' : ''}" id="page-effect-${page.number}"><b></b>${transition.effect ? effectLabel(transition.effect) : 'Standard scroll'}</div><div class="page-frame-shell" id="page-shell-${page.number}"><div class="page-frame" id="page-frame-${page.number}"><img src="${page.image}" alt="PDF page ${page.number}"><div class="editor-text-layer" id="text-layer-${page.number}"></div></div></div>`;
+                const frame = section.querySelector('.page-frame'); frame.style.aspectRatio = `${page.width} / ${page.height}`; frame.style.setProperty('--page-max', `${Math.min(page.width, 820)}px`);
+                const textLayer = section.querySelector('.editor-text-layer');
+                (page.spans || []).forEach(span => {
+                    if (!String(span.text || '').trim()) return;
+                    const textSpan = document.createElement('button'); textSpan.type = 'button'; textSpan.className = 'editor-text-span';
+                    const left = span.bbox[0] / page.width * 100, top = span.bbox[1] / page.height * 100, width = (span.bbox[2] - span.bbox[0]) / page.width * 100, height = (span.bbox[3] - span.bbox[1]) / page.height * 100;
+                    Object.assign(textSpan.style, { left:`${left}%`, top:`${top}%`, width:`${width}%`, height:`${height}%` });
+                    textSpan.dataset.text = span.text; textSpan.dataset.pageNum = page.number; textSpan.dataset.fontSize = span.font_size || 12; textSpan.dataset.bbox = JSON.stringify(span.bbox); textSpan.setAttribute('aria-label', `Edit ${span.text}`);
+                    textSpan.addEventListener('click', event => { event.stopPropagation(); selectPage(page.number, false); openLinkModal(textSpan); }); textLayer.appendChild(textSpan);
                 });
-                pageContainer.appendChild(textLayer);
-                workspace.appendChild(pageContainer);
-                
-                // Render '+' transition inserter button between pages
-                if (index < pages.length - 1) {
-                    const divider = document.createElement('div');
-                    divider.className = 'transition-divider py-5 flex justify-center items-center relative my-1';
-                    divider.innerHTML = `
-                        <div class="absolute w-full h-px bg-slate-200"></div>
-                        <button type="button" class="transition-add-btn relative z-10 w-8 h-8 rounded-full bg-indigo-600 hover:bg-indigo-700 text-white flex items-center justify-center font-bold shadow transition transform hover:scale-110" data-target-page="${page.number + 1}">
-                            +
-                        </button>
-                        <span class="transition-label absolute mt-12 text-[9px] font-bold text-slate-400 bg-slate-50 px-2 py-0.5 rounded border border-slate-200 shadow-sm" id="transition-label-${page.number + 1}">
-                            No Transition (Standard scroll)
-                        </span>
-                    `;
-                    
-                    divider.querySelector('.transition-add-btn').addEventListener('click', (e) => openTransitionModal(page.number + 1, e));
-                    workspace.appendChild(divider);
+                section.addEventListener('click', () => selectPage(page.number, false)); workspace.appendChild(section);
+                if (index < pdfData.length - 1) {
+                    const lane = document.createElement('div'); lane.className = 'transition-lane'; lane.dataset.target = page.number + 1;
+                    const nextEffect = getTransition(page.number + 1).effect;
+                    lane.innerHTML = `<button type="button" class="transition-button ${nextEffect ? 'configured' : ''}" id="transition-button-${page.number + 1}"><span class="transition-plus">+</span><span>${nextEffect ? effectLabel(nextEffect) : 'Add scroll transition'}</span></button>`;
+                    lane.querySelector('button').addEventListener('click', () => { selectPage(page.number + 1, false); openTransitionModal(page.number + 1); }); workspace.appendChild(lane);
                 }
             });
+            buildPageRail(); refreshEditorOverlays(); selectPage(selectedPage, false);
         }
 
-        // Dropdown page selector setup
-        function populatePageSelectScroll() {
-            const select = document.getElementById('config-link-target-scroll');
-            select.innerHTML = '';
-            pdfData.forEach(p => {
-                const opt = document.createElement('option');
-                opt.value = `#page-${p.number}`;
-                opt.textContent = `Scroll to Page ${p.number}`;
-                select.appendChild(opt);
-            });
+        function buildPageRail() {
+            const rail = document.getElementById('page-rail'); rail.innerHTML = '';
+            pdfData.forEach(page => { const button = document.createElement('button'); button.type = 'button'; button.className = 'rail-page'; button.dataset.page = page.number; button.innerHTML = `<span class="rail-thumb"><img src="${page.image}" alt=""></span><span><strong>Page ${String(page.number).padStart(2,'0')}</strong><small>${getTransition(page.number).effect ? effectLabel(getTransition(page.number).effect) : 'STANDARD'}</small></span>`; button.addEventListener('click', () => scrollToPage(page.number)); rail.appendChild(button); });
         }
 
-        function toggleLinkTargetInputs() {
-            const type = document.getElementById('config-link-type').value;
-            const urlInput = document.getElementById('config-link-target-url');
-            const scrollSelect = document.getElementById('config-link-target-scroll');
-            const label = document.getElementById('config-link-target-label');
-            
-            if (type === 'url') {
-                urlInput.classList.remove('hidden');
-                scrollSelect.classList.add('hidden');
-                label.textContent = "Target URL";
-            } else {
-                urlInput.classList.add('hidden');
-                scrollSelect.classList.remove('hidden');
-                label.textContent = "Target Section";
-            }
+        function selectPage(pageNumber, shouldScroll) {
+            if (!pdfData.length) return; selectedPage = Number(pageNumber) || 1;
+            document.querySelectorAll('.editor-page').forEach(item => item.classList.toggle('selected', Number(item.dataset.page) === selectedPage));
+            document.querySelectorAll('.rail-page').forEach(item => item.classList.toggle('active', Number(item.dataset.page) === selectedPage));
+            document.getElementById('selected-page-label').textContent = `PAGE ${String(selectedPage).padStart(2,'0')}`;
+            const transition = getTransition(selectedPage); document.getElementById('motion-selected-name').textContent = `Page ${String(selectedPage).padStart(2,'0')} · ${transition.effect ? effectLabel(transition.effect) : 'Standard scroll'}`;
+            if (shouldScroll) document.getElementById(`editor-page-${selectedPage}`)?.scrollIntoView({ behavior:'smooth', block:'start' });
         }
-
-        function toggleButtonStyleInputs() {
-            const isBtn = document.getElementById('config-is-button').checked;
-            const settingsPanel = document.getElementById('config-button-settings-panel');
-            if (isBtn) {
-                settingsPanel.classList.remove('hidden');
-            } else {
-                settingsPanel.classList.add('hidden');
-            }
+        function scrollToPage(pageNumber) { selectPage(pageNumber, true); }
+        function setCanvasMode(mode) { document.getElementById('fit-control').classList.toggle('active', mode === 'fit'); document.getElementById('focus-control').classList.toggle('active', mode === 'focus'); document.querySelector('.stage')?.classList.toggle('focus-mode', mode === 'focus'); }
+        function setInspectorTab(tab) { document.querySelectorAll('.inspector-tab').forEach(button => button.classList.toggle('active', button.dataset.tab === tab)); document.querySelectorAll('.inspector-pane').forEach(pane => pane.classList.toggle('active', pane.dataset.pane === tab)); }
+        function getTransition(pageNumber) { const raw = transitions[String(pageNumber)] || transitions[pageNumber]; return typeof raw === 'string' ? { effect:raw } : (raw || {}); }
+        function effectLabel(effect) { return (effects[effect] || effects['']).name; }
+        function findCustomLink(pageNumber, bbox) { return customLinks.find(link => Number(link.page) === Number(pageNumber) && Array.isArray(link.bbox) && link.bbox.every((value, index) => Math.abs(Number(value) - Number(bbox[index])) < .5)); }
+        function refreshEditorOverlays() {
+            document.querySelectorAll('.editor-text-span').forEach(span => { const link = findCustomLink(span.dataset.pageNum, JSON.parse(span.dataset.bbox)); span.classList.toggle('has-link', Boolean(link)); const existing = span.querySelector('.override-surface'); if (existing) existing.remove(); if (link?.edited_text) { const override = document.createElement('span'); override.className = 'override-surface'; override.textContent = link.edited_text; override.style.background = /^#[0-9a-f]{6}$/i.test(link.bg_color || '') ? link.bg_color : '#ffffff'; const page = pdfData.find(item => Number(item.number) === Number(span.dataset.pageNum)); override.style.fontSize = `${Math.max(.8, Number(span.dataset.fontSize || 12) / Number(page.width) * 100)}cqw`; span.appendChild(override); } });
         }
+        function refreshAllPanels() { updateHotspotsList(); updateAppliedTransitions(); updatePublishStats(); buildPageRail(); refreshPageBadges(); }
+        function refreshPageBadges() { pdfData.forEach(page => { const transition = getTransition(page.number); const badge = document.getElementById(`page-effect-${page.number}`); if (badge) { badge.classList.toggle('has-effect', Boolean(transition.effect)); badge.innerHTML = `<b></b>${transition.effect ? effectLabel(transition.effect) : 'Standard scroll'}`; } const section = document.getElementById(`editor-page-${page.number}`); if (section) section.dataset.effect = transition.effect || ''; const laneButton = document.getElementById(`transition-button-${page.number}`); if (laneButton && page.number > 1) { laneButton.classList.toggle('configured', Boolean(transition.effect)); laneButton.innerHTML = `<span class="transition-plus">+</span><span>${transition.effect ? effectLabel(transition.effect) : 'Add scroll transition'}</span>`; } }); }
+        function updateHotspotsList() { const list = document.getElementById('hotspots-list'); const pageLinks = customLinks.map((link, index) => ({ link,index })).filter(entry => Number(entry.link.page) === selectedPage); if (!pageLinks.length) { list.innerHTML = '<div class="empty-links">No interactive layers on this page yet.<br>Click any visible text to add one.</div>'; return; } list.innerHTML = pageLinks.map(({link,index}) => `<div class="link-item"><span class="link-icon">↗</span><div><b>${escapeClient(link.edited_text || link.text || 'Text layer')}</b><small>${escapeClient(link.href || 'Text override only')}</small></div><button type="button" title="Remove" onclick="removeHotspotByIndex(${index})">×</button></div>`).join(''); }
+        function updateAppliedTransitions() { const list = document.getElementById('applied-transitions'); const active = pdfData.filter(page => getTransition(page.number).effect); if (!active.length) { list.innerHTML = '<div class="empty-links">No transitions applied. Select a page entrance to give the scroll a sense of depth.</div>'; return; } list.innerHTML = active.map(page => `<button type="button" class="link-item" style="width:100%;text-align:left" onclick="openTransitionModal(${page.number})"><span class="link-icon">◈</span><div><b>Page ${String(page.number).padStart(2,'0')} · ${effectLabel(getTransition(page.number).effect)}</b><small>Click to tune this motion</small></div></button>`).join(''); }
+        function updatePublishStats() { document.getElementById('publish-pages').textContent = pdfData.length; document.getElementById('publish-effects').textContent = Object.values(transitions).filter(item => (typeof item === 'string' ? item : item.effect)).length; document.getElementById('publish-links').textContent = customLinks.length; }
+        function escapeClient(value) { const div = document.createElement('div'); div.textContent = value || ''; return div.innerHTML; }
+        function populateScrollTargets() { const select = document.getElementById('config-link-target-scroll'); select.innerHTML = pdfData.map(page => `<option value="#page-${page.number}">Scroll to page ${String(page.number).padStart(2,'0')}</option>`).join(''); }
 
-        // Modal triggers
-        function openLinkModal(textSpan, event) {
-            event.stopPropagation();
-            closeTransitionModal();
-            const modal = document.getElementById('link-configurator');
-            modal.classList.remove('hidden');
-            
-            const rect = textSpan.getBoundingClientRect();
-            modal.style.top = `${rect.bottom + window.scrollY + 5}px`;
-            modal.style.left = `${rect.left + window.scrollX}px`;
-            
-            activeSpan = textSpan;
-            
-            const pageNum = parseInt(textSpan.dataset.pageNum);
-            const bbox = JSON.parse(textSpan.dataset.bbox);
-            const existing = findCustomLink(pageNum, bbox);
-            
-            const deleteBtn = document.getElementById('config-delete-btn');
-            const textOverride = document.getElementById('config-edited-text');
-            const maskColorPanel = document.getElementById('config-mask-color-panel');
-            
-            // Listen for keyup to show/hide mask color selector
-            textOverride.addEventListener('input', () => {
-                if (textOverride.value.trim().length > 0) {
-                    maskColorPanel.classList.remove('hidden');
-                } else {
-                    maskColorPanel.classList.add('hidden');
-                }
-            });
-
-            if (existing) {
-                deleteBtn.classList.remove('hidden');
-                textOverride.value = existing.edited_text || '';
-                if (textOverride.value.trim().length > 0) {
-                    maskColorPanel.classList.remove('hidden');
-                    document.getElementById('config-bg-color').value = existing.bg_color || '#ffffff';
-                } else {
-                    maskColorPanel.classList.add('hidden');
-                }
-                
-                document.getElementById('config-link-type').value = existing.href.startsWith('#page-') ? 'scroll' : 'url';
-                toggleLinkTargetInputs();
-                if (existing.href.startsWith('#page-')) {
-                    document.getElementById('config-link-target-scroll').value = existing.href;
-                } else {
-                    document.getElementById('config-link-target-url').value = existing.href;
-                }
-                
-                document.getElementById('config-is-button').checked = existing.is_button || false;
-                toggleButtonStyleInputs();
-                document.getElementById('config-btn-style').value = existing.btn_style || 'filled';
-                document.getElementById('config-btn-color').value = existing.btn_color || 'indigo';
-                document.getElementById('config-hover-effect').value = existing.hover_effect || 'glow';
-            } else {
-                deleteBtn.classList.add('hidden');
-                textOverride.value = '';
-                maskColorPanel.classList.add('hidden');
-                document.getElementById('config-link-type').value = 'url';
-                toggleLinkTargetInputs();
-                document.getElementById('config-link-target-url').value = '';
-                document.getElementById('config-is-button').checked = false;
-                toggleButtonStyleInputs();
-                document.getElementById('config-hover-effect').value = 'glow';
-            }
+        function openLinkModal(span) {
+            activeSpan = span; const pageNumber = Number(span.dataset.pageNum), bbox = JSON.parse(span.dataset.bbox), existing = findCustomLink(pageNumber, bbox);
+            document.getElementById('selected-text-preview').textContent = `“${span.dataset.text}” · Page ${String(pageNumber).padStart(2,'0')}`;
+            document.getElementById('config-edited-text').value = existing?.edited_text || '';
+            document.getElementById('config-bg-color').value = /^#[0-9a-f]{6}$/i.test(existing?.bg_color || '') ? existing.bg_color : '#ffffff';
+            const hasAction = Boolean(existing && existing.href && existing.href !== '#'); document.getElementById('config-action-enabled').checked = hasAction;
+            const isScroll = existing?.href?.startsWith('#page-'); document.getElementById('config-link-type').value = isScroll ? 'scroll' : 'url'; document.getElementById('config-link-target-url').value = isScroll ? '' : (existing?.href || ''); document.getElementById('config-link-target-scroll').value = isScroll ? existing.href : '#page-1';
+            document.getElementById('config-hover-effect').value = existing?.hover_effect || 'glow'; document.getElementById('config-is-button').checked = Boolean(existing?.is_button); document.getElementById('config-btn-style').value = existing?.btn_style || 'filled'; document.getElementById('config-btn-color').value = existing?.btn_color || 'indigo';
+            document.getElementById('config-delete-btn').classList.toggle('hidden', !existing); toggleLinkTargetInputs(); toggleButtonSettings(); document.getElementById('link-modal-backdrop').classList.remove('hidden'); document.getElementById('config-edited-text').focus();
         }
-
-        function closeLinkModal() {
-            document.getElementById('link-configurator').classList.add('hidden');
-            activeSpan = null;
-        }
-
-        // Render dynamic customization sub-form inside the configurator window
-        function showCustomTransitionOptions(effect) {
-            const container = document.getElementById('transition-custom-options');
-            container.innerHTML = '';
-            if (!effect) return;
-            
-            let html = `
-                <div class="space-y-1">
-                    <label class="block text-[9px] font-bold text-slate-400 uppercase">Timeline Scroll Speed</label>
-                    <select id="trans-speed" class="w-full text-xs rounded border border-slate-200 py-1.5 px-2 bg-white select-box border">
-                        <option value="0.5s">0.5s (Fast / Snappy)</option>
-                        <option value="0.9s" selected>0.9s (Standard / Smooth)</option>
-                        <option value="1.5s">1.5s (Slow / Cinematic)</option>
-                    </select>
-                </div>
-            `;
-            
-            if (effect === 'sticky-cards') {
-                html += `
-                    <div class="space-y-1">
-                        <label class="block text-[9px] font-bold text-slate-400 uppercase">Card Stack Offset [2]</label>
-                        <select id="trans-sticky-offset" class="w-full text-xs rounded border border-slate-200 py-1.5 px-2 bg-white select-box border">
-                            <option value="0px" selected>0px (Full Screen Stacking)</option>
-                            <option value="20px">20px (Partial Overlap)</option>
-                            <option value="40px">40px (Staggered Overlap)</option>
-                            <option value="60px">60px (Comfortable Stack)</option>
-                        </select>
-                    </div>
-                `;
-            } else if (effect === 'parallax-zoom') {
-                html += `
-                    <div class="space-y-1">
-                        <label class="block text-[9px] font-bold text-slate-400 uppercase">Background Zoom Factor</label>
-                        <select id="trans-zoom-scale" class="w-full text-xs rounded border border-slate-200 py-1.5 px-2 bg-white select-box border">
-                            <option value="1.1">1.1x (Subtle)</option>
-                            <option value="1.2" selected>1.2x (Default)</option>
-                            <option value="1.35">1.3x (High Depth)</option>
-                        </select>
-                    </div>
-                    <div class="space-y-1">
-                        <label class="block text-[9px] font-bold text-slate-400 uppercase">Parallax Move Factor</label>
-                        <select id="trans-zoom-translate" class="w-full text-xs rounded border border-slate-200 py-1.5 px-2 bg-white select-box border">
-                            <option value="2%">2% Translate</option>
-                            <option value="5%" selected>5% Translate</option>
-                            <option value="8%">8% Translate</option>
-                        </select>
-                    </div>
-                `;
-            } else if (effect === 'clip-reveal') {
-                html += `
-                    <div class="space-y-1">
-                        <label class="block text-[9px] font-bold text-slate-400 uppercase">Wipe Mask Shape</label>
-                        <select id="trans-clip-shape" class="w-full text-xs rounded border border-slate-200 py-1.5 px-2 bg-white select-box border">
-                            <option value="circle" selected>Circle (Cinematic Shutter)</option>
-                            <option value="rectangle">Rectangle (Wipe Zoom)</option>
-                            <option value="diamond">Diamond (Geometric Reveal)</option>
-                        </select>
-                    </div>
-                    <div class="space-y-1">
-                        <label class="block text-[9px] font-bold text-slate-400 uppercase">Expand Origin Position</label>
-                        <select id="trans-clip-origin" class="w-full text-xs rounded border border-slate-200 py-1.5 px-2 bg-white select-box border">
-                            <option value="center" selected>Viewport Center</option>
-                            <option value="top-left">Top Left</option>
-                            <option value="bottom-right">Bottom Right</option>
-                        </select>
-                    </div>
-                `;
-            } else if (effect === 'split-screen') {
-                html += `
-                    <div class="space-y-1">
-                        <label class="block text-[9px] font-bold text-slate-400 uppercase">Split Move Axis</label>
-                        <select id="trans-split-direction" class="w-full text-xs rounded border border-slate-200 py-1.5 px-2 bg-white select-box border">
-                            <option value="vertical" selected>Vertical Columns (Counter Scroll)</option>
-                            <option value="horizontal">Horizontal Rows (Left/Right Reveal)</option>
-                        </select>
-                    </div>
-                `;
-            } else if (effect === 'horizontal-slide') {
-                html += `
-                    <div class="space-y-1">
-                        <label class="block text-[9px] font-bold text-slate-400 uppercase">Slide Entrance Axis</label>
-                        <select id="trans-slide-direction" class="w-full text-xs rounded border border-slate-200 py-1.5 px-2 bg-white select-box border">
-                            <option value="right-to-left" selected>Right to Left (Slide In)</option>
-                            <option value="left-to-right">Left to Right (Slide In)</option>
-                        </select>
-                    </div>
-                `;
-            } else if (effect === 'color-bleed') {
-                html += `
-                    <div class="space-y-1">
-                        <label class="block text-[9px] font-bold text-slate-400 uppercase">Dynamic Color Theme</label>
-                        <select id="trans-bleed-color" class="w-full text-xs rounded border border-slate-200 py-1.5 px-2 bg-white select-box border">
-                            <option value="indigo" selected>Indigo Bleed</option>
-                            <option value="emerald">Emerald Bleed</option>
-                            <option value="rose">Rose Bleed</option>
-                            <option value="slate">Slate Bleed</option>
-                            <option value="orange">Orange Bleed</option>
-                        </select>
-                    </div>
-                    <div class="space-y-1">
-                        <label class="block text-[9px] font-bold text-slate-400 uppercase">Bleed Softness (Blur)</label>
-                        <select id="trans-bleed-blur" class="w-full text-xs rounded border border-slate-200 py-1.5 px-2 bg-white select-box border">
-                            <option value="10px">10px (Firm Edge)</option>
-                            <option value="20px" selected>20px (Medium Glow)</option>
-                            <option value="40px">40px (Soft Backdrop)</option>
-                        </select>
-                    </div>
-                `;
-            } else if (effect === 'cube-rotation') {
-                html += `
-                    <div class="space-y-1">
-                        <label class="block text-[9px] font-bold text-slate-400 uppercase">3D Perspective Depth</label>
-                        <select id="trans-cube-perspective" class="w-full text-xs rounded border border-slate-200 py-1.5 px-2 bg-white select-box border">
-                            <option value="800px">800px (High Depth)</option>
-                            <option value="1000px" selected>1000px (Default)</option>
-                            <option value="1500px">1500px (Subtle 3D)</option>
-                        </select>
-                    </div>
-                    <div class="space-y-1">
-                        <label class="block text-[9px] font-bold text-slate-400 uppercase">Cube Rotation Axis</label>
-                        <select id="trans-cube-direction" class="w-full text-xs rounded border border-slate-200 py-1.5 px-2 bg-white select-box border">
-                            <option value="down" selected>Tumble Down (Top to Bottom)</option>
-                            <option value="up">Tumble Up (Bottom to Top)</option>
-                        </select>
-                    </div>
-                `;
-            } else if (effect === 'text-mask-reveal') {
-                html += `
-                    <div class="space-y-1">
-                        <label class="block text-[9px] font-bold text-slate-400 uppercase">Mask Focal Text</label>
-                        <input type="text" id="trans-mask-title" value="DISCOVER" class="w-full text-xs rounded border border-slate-200 py-1.5 px-2 bg-white border">
-                    </div>
-                    <div class="space-y-1">
-                        <label class="block text-[9px] font-bold text-slate-400 uppercase">Max Growth Scale</label>
-                        <select id="trans-mask-scale" class="w-full text-xs rounded border border-slate-200 py-1.5 px-2 bg-white select-box border">
-                            <option value="10">10x Scale</option>
-                            <option value="15" selected>15x Scale (Recommended)</option>
-                            <option value="20">20x Scale</option>
-                        </select>
-                    </div>
-                `;
-            } else if (effect === 'reveal') {
-                html += `
-                    <div class="space-y-1">
-                        <label class="block text-[9px] font-bold text-slate-400 uppercase">Wipe Direction</label>
-                        <select id="trans-wipe-direction" class="w-full text-xs rounded border border-slate-200 py-1.5 px-2 bg-white select-box border">
-                            <option value="bottom-to-top" selected>Bottom to Top</option>
-                            <option value="top-to-bottom">Top to Bottom</option>
-                        </select>
-                    </div>
-                `;
-            }
-            
-            container.innerHTML = html;
-        }
-
-        function openTransitionModal(targetPageNum, event) {
-            event.stopPropagation();
-            closeLinkModal();
-            const modal = document.getElementById('transition-configurator');
-            modal.classList.remove('hidden');
-            
-            const btn = event.currentTarget;
-            const rect = btn.getBoundingClientRect();
-            modal.style.top = `${rect.bottom + window.scrollY + 5}px`;
-            modal.style.left = `${rect.left + window.scrollX - 120}px`;
-            
-            activeTransitionTarget = targetPageNum;
-            
-            const existing = transitions[targetPageNum];
-            if (existing) {
-                const effect = typeof existing === 'string' ? existing : existing.effect;
-                document.getElementById('transition-effect-select').value = effect;
-                showCustomTransitionOptions(effect);
-                
-                if (typeof existing === 'object') {
-                    document.getElementById('trans-speed').value = existing.speed || '0.9s';
-                    if (effect === 'sticky-cards') {
-                        document.getElementById('trans-sticky-offset').value = existing.offset || '0px';
-                    } else if (effect === 'clip-reveal') {
-                        document.getElementById('trans-clip-shape').value = existing.shape || 'circle';
-                        document.getElementById('trans-clip-origin').value = existing.origin || 'center';
-                    } else if (effect === 'split-screen') {
-                        document.getElementById('trans-split-direction').value = existing.split_direction || 'vertical';
-                    } else if (effect === 'horizontal-snap') {
-                        document.getElementById('trans-slide-direction').value = existing.slide_direction || 'right-to-left';
-                    } else if (effect === 'color-bleed') {
-                        document.getElementById('trans-bleed-color').value = existing.bleed_color || 'indigo';
-                        document.getElementById('trans-bleed-blur').value = existing.bleed_blur || '20px';
-                    } else if (effect === 'cube-rotation') {
-                        document.getElementById('trans-cube-perspective').value = existing.perspective || '1000px';
-                        document.getElementById('trans-cube-direction').value = existing.cube_direction || 'down';
-                    } else if (effect === 'text-mask-reveal') {
-                        document.getElementById('trans-mask-title').value = existing.mask_title || 'DISCOVER';
-                        document.getElementById('trans-mask-scale').value = existing.mask_scale || '15';
-                    } else if (effect === 'reveal') {
-                        document.getElementById('trans-wipe-direction').value = existing.wipe_direction || 'bottom-to-top';
-                    }
-                }
-            } else {
-                document.getElementById('transition-effect-select').value = '';
-                showCustomTransitionOptions('');
-            }
-        }
-
-        function closeTransitionModal() {
-            document.getElementById('transition-configurator').classList.add('hidden');
-            activeTransitionTarget = null;
-        }
-
-        // Link mappings with float tolerance limits
-        function findCustomLink(pageNum, bbox) {
-            return customLinks.find(l => {
-                if (l.page !== pageNum) return false;
-                return Math.abs(l.bbox[0] - bbox[0]) < 0.5 &&
-                       Math.abs(l.bbox[1] - bbox[1]) < 0.5 &&
-                       Math.abs(l.bbox[2] - bbox[2]) < 0.5 &&
-                       Math.abs(l.bbox[3] - bbox[3]) < 0.5;
-            });
-        }
-
+        function closeLinkModal() { document.getElementById('link-modal-backdrop').classList.add('hidden'); activeSpan = null; }
+        function toggleLinkTargetInputs() { const enabled = document.getElementById('config-action-enabled').checked, scroll = document.getElementById('config-link-type').value === 'scroll'; document.getElementById('link-target-fields').classList.toggle('hidden', !enabled); document.getElementById('url-target-field').classList.toggle('hidden', !enabled || scroll); document.getElementById('scroll-target-field').classList.toggle('hidden', !enabled || !scroll); }
+        function toggleButtonSettings() { document.getElementById('button-settings').classList.toggle('hidden', !document.getElementById('config-is-button').checked); }
         function saveActiveLink() {
-            if (!activeSpan) return;
-            const pageNum = parseInt(activeSpan.dataset.pageNum);
-            const bbox = JSON.parse(activeSpan.dataset.bbox);
-            const text = activeSpan.dataset.text;
-            const fontSize = parseFloat(activeSpan.dataset.font_size);
-            
-            const type = document.getElementById('config-link-type').value;
-            const href = type === 'url' ? document.getElementById('config-link-target-url').value.trim() : document.getElementById('config-link-target-scroll').value;
-            const hover_effect = document.getElementById('config-hover-effect').value;
-            
-            const edited_text = document.getElementById('config-edited-text').value.trim();
-            const bg_color = document.getElementById('config-bg-color').value;
-            const is_button = document.getElementById('config-is-button').checked;
-            const btn_style = document.getElementById('config-btn-style').value;
-            const btn_color = document.getElementById('config-btn-color').value;
-            
-            if (type === 'url' && !href) {
-                alert("Please enter a target URL");
-                return;
-            }
-            
-            customLinks = customLinks.filter(l => !(l.page === pageNum && JSON.stringify(l.bbox) === JSON.stringify(bbox)));
-            
-            customLinks.push({
-                page: pageNum,
-                bbox: bbox,
-                text: text,
-                href: href,
-                hover_effect: hover_effect,
-                target_blank: type === 'url',
-                edited_text: edited_text,
-                bg_color: bg_color,
-                is_button: is_button,
-                btn_style: btn_style,
-                btn_color: btn_color,
-                font_size: fontSize
-            });
-            
-            activeSpan.classList.add('has-link');
-            closeLinkModal();
-            updateHotspotsList();
+            if (!activeSpan) return; const page = Number(activeSpan.dataset.pageNum), bbox = JSON.parse(activeSpan.dataset.bbox); const enabled = document.getElementById('config-action-enabled').checked, isScroll = document.getElementById('config-link-type').value === 'scroll'; let href = '#';
+            if (enabled) { href = isScroll ? document.getElementById('config-link-target-scroll').value : document.getElementById('config-link-target-url').value.trim(); if (!href) { showToast('Add a destination URL or turn off clickability.'); return; } if (!isScroll && !/^https?:\/\//i.test(href) && !/^(mailto:|tel:)/i.test(href)) href = `https://${href}`; }
+            customLinks = customLinks.filter(link => !(Number(link.page) === page && Array.isArray(link.bbox) && link.bbox.every((value,index) => Math.abs(Number(value) - Number(bbox[index])) < .5)));
+            customLinks.push({ page, bbox, text:activeSpan.dataset.text, href, hover_effect:document.getElementById('config-hover-effect').value, target_blank:enabled && !isScroll, edited_text:document.getElementById('config-edited-text').value.trim(), bg_color:document.getElementById('config-bg-color').value, is_button:document.getElementById('config-is-button').checked, btn_style:document.getElementById('config-btn-style').value, btn_color:document.getElementById('config-btn-color').value, font_size:Number(activeSpan.dataset.fontSize || 12) });
+            refreshEditorOverlays(); refreshAllPanels(); closeLinkModal(); showToast('Interactive layer updated.');
         }
+        function deleteActiveLink() { if (!activeSpan) return; const page = Number(activeSpan.dataset.pageNum), bbox = JSON.parse(activeSpan.dataset.bbox); customLinks = customLinks.filter(link => !(Number(link.page) === page && Array.isArray(link.bbox) && link.bbox.every((value,index) => Math.abs(Number(value) - Number(bbox[index])) < .5))); refreshEditorOverlays(); refreshAllPanels(); closeLinkModal(); showToast('Layer removed.'); }
+        function removeHotspotByIndex(index) { customLinks.splice(index,1); refreshEditorOverlays(); refreshAllPanels(); showToast('Layer removed.'); }
 
-        function deleteActiveLink() {
-            if (!activeSpan) return;
-            const pageNum = parseInt(activeSpan.dataset.pageNum);
-            const bbox = JSON.parse(activeSpan.dataset.bbox);
-            
-            customLinks = customLinks.filter(l => !(l.page === pageNum && JSON.stringify(l.bbox) === JSON.stringify(bbox)));
-            activeSpan.classList.remove('has-link');
-            closeLinkModal();
-            updateHotspotsList();
-        }
-
-        // Apply customized transition parameters into configuration variables object
-        function saveTransition() {
-            if (!activeTransitionTarget) return;
-            const effect = document.getElementById('transition-effect-select').value;
-            const label = document.getElementById(`transition-label-${activeTransitionTarget}`);
-            
-            if (effect) {
-                const config = {
-                    effect: effect,
-                    speed: document.getElementById('trans-speed').value
-                };
-                
-                if (effect === 'sticky-cards') {
-                    config.offset = document.getElementById('trans-sticky-offset').value;
-                } else if (effect === 'clip-reveal') {
-                    config.shape = document.getElementById('trans-clip-shape').value;
-                    config.origin = document.getElementById('trans-clip-origin').value;
-                } else if (effect === 'split-screen') {
-                    config.split_direction = document.getElementById('trans-split-direction').value;
-                } else if (effect === 'horizontal-snap') {
-                    config.slide_direction = document.getElementById('trans-slide-direction').value;
-                } else if (effect === 'color-bleed') {
-                    config.bleed_color = document.getElementById('trans-bleed-color').value;
-                    config.bleed_blur = document.getElementById('trans-bleed-blur').value;
-                } else if (effect === 'cube-rotation') {
-                    config.perspective = document.getElementById('trans-cube-perspective').value;
-                    config.cube_direction = document.getElementById('trans-cube-direction').value;
-                } else if (effect === 'text-mask-reveal') {
-                    config.mask_title = document.getElementById('trans-mask-title').value;
-                    config.mask_scale = document.getElementById('trans-mask-scale').value;
-                } else if (effect === 'reveal') {
-                    config.wipe_direction = document.getElementById('trans-wipe-direction').value;
-                }
-                
-                transitions[activeTransitionTarget] = config;
-                label.textContent = "Transition: " + effect.toUpperCase();
-                label.classList.add('text-indigo-600', 'border-indigo-200', 'bg-indigo-50');
-            } else {
-                delete transitions[activeTransitionTarget];
-                label.textContent = "No Transition (Standard scroll)";
-                label.classList.remove('text-indigo-600', 'border-indigo-200', 'bg-indigo-50');
-            }
-            closeTransitionModal();
-        }
-
-        function updateHotspotsList() {
-            const list = document.getElementById('hotspots-list');
-            if (customLinks.length === 0) {
-                list.innerHTML = 'No custom links or buttons mapped yet. Click on any text on the left to add one!';
-                return;
-            }
-            list.innerHTML = '';
-            customLinks.forEach((l, idx) => {
-                const item = document.createElement('div');
-                item.className = 'p-2 bg-slate-50 border border-slate-100 rounded flex justify-between items-center';
-                item.innerHTML = `
-                    <div class="truncate pr-2">
-                        <span class="font-bold text-slate-700">"${l.edited_text || l.text}"</span>
-                        <span class="block text-[10px] text-slate-400">Page ${l.page} → ${l.href} (${l.hover_effect})</span>
-                    </div>
-                    <button type="button" onclick="removeHotspotByIndex(${idx})" class="text-rose-500 hover:text-rose-700 font-bold">×</button>
-                `;
-                list.appendChild(item);
-            });
-        }
-
-        function removeHotspotByIndex(index) {
-            const l = customLinks[index];
-            const pageContainer = document.getElementById('editor-workspace').children[(l.page - 1) * 2];
-            const textLayer = pageContainer.querySelector('.interactive-overlay') || pageContainer.children[2];
-            
-            const spans = textLayer.children;
-            for (let s of spans) {
-                if (s.dataset.pageNum == l.page && s.dataset.bbox === JSON.stringify(l.bbox)) {
-                    s.classList.remove('has-link');
-                    break;
-                }
-            }
-            customLinks.splice(index, 1);
-            updateHotspotsList();
-        }
-
-        // CORRECTED GLOBAL CLICK LISTENER [3]
-        document.addEventListener('click', (e) => {
-            const linkConfig = document.getElementById('link-configurator');
-            const transConfig = document.getElementById('transition-configurator');
-            
-            if (!linkConfig.contains(e.target) && !e.target.classList.contains('editor-text-span')) {
-                closeLinkModal();
-            }
-            
-            if (!transConfig.contains(e.target) && !e.target.closest('.transition-add-btn')) {
-                closeTransitionModal();
-            }
-        });
-
-        // Phase 3: Post back stateless configurations and trigger file download
-        function triggerBuild() {
-            const exportBtn = document.querySelector('#editor-actions button');
-            exportBtn.disabled = true;
-            exportBtn.textContent = "Compiling Site Assets...";
-            
-            const payload = {
-                layout_mode: document.getElementById('layout-mode').value,
-                meta_title: document.getElementById('meta-title').value,
-                meta_desc: document.getElementById('meta-desc').value,
-                ga_id: document.getElementById('ga-id').value,
-                form_action: document.getElementById('form-action').value,
-                pages: pdfData,
-                transitions: transitions,
-                custom_links: customLinks
-            };
-            
-            fetch('/compile', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(payload)
-            })
-            .then(res => {
-                if (!res.ok) throw new Error("Compiler threw an error.");
-                return res.blob();
-            })
-            .then(blob => {
-                const url = window.URL.createObjectURL(blob);
-                const a = document.createElement('a');
-                a.href = url;
-                a.download = payload.layout_mode === 'single' ? "index.html" : "website_files.zip";
-                document.body.appendChild(a);
-                a.click();
-                a.remove();
-                
-                exportBtn.disabled = false;
-                exportBtn.textContent = "Export Static Website";
-            })
-            .catch(err => {
-                alert("Compilation failed: " + err);
-                exportBtn.disabled = false;
-                exportBtn.textContent = "Export Static Website";
-            });
-        }
+        function openTransitionModal(pageNumber) { if (!pdfData.length || Number(pageNumber) === 1) { if (Number(pageNumber) === 1) showToast('The opening page starts the story — add motion from page 02 onwards.'); return; } activeTransitionTarget = Number(pageNumber); const current = getTransition(activeTransitionTarget); selectedEffect = current.effect || ''; document.getElementById('transition-modal-title').textContent = `Entrance for page ${String(activeTransitionTarget).padStart(2,'0')}`; renderEffectGrid(); renderTransitionOptions(current); document.getElementById('transition-modal-backdrop').classList.remove('hidden'); }
+        function closeTransitionModal() { document.getElementById('transition-modal-backdrop').classList.add('hidden'); activeTransitionTarget = null; selectedEffect = ''; }
+        function renderEffectGrid() { const grid = document.getElementById('effect-grid'); grid.innerHTML = effectChoices.map(effect => `<button type="button" class="effect-choice ${effect === selectedEffect ? 'active' : ''}" data-effect="${effect}" onclick="selectEffect('${effect}')"><span>${effectLabel(effect)}</span><small>${effects[effect].note}</small><i></i></button>`).join(''); }
+        function selectEffect(effect) { selectedEffect = effect; renderEffectGrid(); renderTransitionOptions(getTransition(activeTransitionTarget)); }
+        function renderTransitionOptions(existing) { const current = existing || {}; const options = document.getElementById('transition-custom-options'); if (!selectedEffect) { options.innerHTML = ''; return; } let html = `<div class="modal-field"><label for="trans-speed">Motion pace</label><select id="trans-speed"><option value="0.55s">Quick · 0.55s</option><option value="0.9s">Balanced · 0.9s</option><option value="1.35s">Cinematic · 1.35s</option><option value="1.8s">Slow burn · 1.8s</option></select></div>`;
+            if (selectedEffect === 'sticky-cards') html += `<div class="modal-field"><label for="trans-sticky-offset">Stack offset</label><select id="trans-sticky-offset"><option value="0px">Full overlap</option><option value="20px">20px reveal</option><option value="40px">40px reveal</option><option value="60px">60px reveal</option></select></div>`;
+            if (selectedEffect === 'parallax-zoom') html += `<div class="two-fields"><div class="modal-field"><label for="trans-zoom-scale">Zoom</label><select id="trans-zoom-scale"><option value="1.06">Subtle</option><option value="1.12">Balanced</option><option value="1.2">Bold</option><option value="1.3">Dramatic</option></select></div><div class="modal-field"><label for="trans-zoom-translate">Camera drift</label><select id="trans-zoom-translate"><option value="-3%">Up</option><option value="-1.5%">Slight up</option><option value="1.5%">Slight down</option><option value="3%">Down</option></select></div></div>`;
+            if (selectedEffect === 'curtain-reveal') html += `<div class="modal-field"><label for="trans-curtain-shape">Opening shape</label><select id="trans-curtain-shape"><option value="circle">Circle</option><option value="rectangle">Rectangle</option><option value="diamond">Diamond</option></select></div>`;
+            if (selectedEffect === 'horizontal-slide') html += `<div class="modal-field"><label for="trans-slide-direction">Entry direction</label><select id="trans-slide-direction"><option value="right-to-left">From right</option><option value="left-to-right">From left</option></select></div>`;
+            if (selectedEffect === 'color-bleed') html += `<div class="two-fields"><div class="modal-field"><label for="trans-bleed-color">Color</label><select id="trans-bleed-color"><option value="indigo">Indigo</option><option value="cyan">Cyan</option><option value="emerald">Emerald</option><option value="rose">Rose</option><option value="orange">Orange</option><option value="slate">Slate</option></select></div><div class="modal-field"><label for="trans-bleed-blur">Softness</label><select id="trans-bleed-blur"><option value="20px">Tight</option><option value="35px">Balanced</option><option value="55px">Diffuse</option></select></div></div>`;
+            if (selectedEffect === 'cube-rotation') html += `<div class="two-fields"><div class="modal-field"><label for="trans-cube-perspective">Depth</label><select id="trans-cube-perspective"><option value="800px">High</option><option value="1000px">Defined</option><option value="1400px">Balanced</option><option value="1800px">Subtle</option></select></div><div class="modal-field"><label for="trans-cube-direction">Tumble</label><select id="trans-cube-direction"><option value="down">From top</option><option value="up">From bottom</option></select></div></div>`;
+            if (selectedEffect === '3d-flip') html += `<div class="modal-field"><label for="trans-flip-direction">Hinge</label><select id="trans-flip-direction"><option value="left">Left edge</option><option value="right">Right edge</option></select></div>`;
+            if (selectedEffect === 'text-mask-reveal') html += `<div class="two-fields"><div class="modal-field"><label for="trans-mask-title">Focal word</label><input id="trans-mask-title" maxlength="20" value="DISCOVER"></div><div class="modal-field"><label for="trans-mask-scale">Growth</label><select id="trans-mask-scale"><option value="1.5">Soft</option><option value="2.1">Bold</option><option value="2.8">Wild</option></select></div></div>`;
+            options.innerHTML = html; document.getElementById('trans-speed').value = current.speed || '0.9s'; const values = { 'trans-sticky-offset':current.offset, 'trans-zoom-scale':current.zoom_scale, 'trans-zoom-translate':current.zoom_translate, 'trans-curtain-shape':current.shape, 'trans-slide-direction':current.slide_direction, 'trans-bleed-color':current.bleed_color, 'trans-bleed-blur':current.bleed_blur, 'trans-cube-perspective':current.perspective, 'trans-cube-direction':current.cube_direction, 'trans-flip-direction':current.flip_direction, 'trans-mask-title':current.mask_title, 'trans-mask-scale':current.mask_scale }; Object.entries(values).forEach(([id,value]) => { const input = document.getElementById(id); if (input && value) input.value = value; }); }
+        function inputValue(id, fallback) { return document.getElementById(id)?.value || fallback; }
+        function saveTransition() { if (!activeTransitionTarget || !selectedEffect) return; const config = { effect:selectedEffect, speed:inputValue('trans-speed','0.9s') }; if (selectedEffect === 'sticky-cards') config.offset = inputValue('trans-sticky-offset','0px'); if (selectedEffect === 'parallax-zoom') { config.zoom_scale=inputValue('trans-zoom-scale','1.12'); config.zoom_translate=inputValue('trans-zoom-translate','-1.5%'); } if (selectedEffect === 'curtain-reveal') config.shape=inputValue('trans-curtain-shape','circle'); if (selectedEffect === 'horizontal-slide') config.slide_direction=inputValue('trans-slide-direction','right-to-left'); if (selectedEffect === 'color-bleed') { config.bleed_color=inputValue('trans-bleed-color','indigo'); config.bleed_blur=inputValue('trans-bleed-blur','35px'); } if (selectedEffect === 'cube-rotation') { config.perspective=inputValue('trans-cube-perspective','1400px'); config.cube_direction=inputValue('trans-cube-direction','down'); } if (selectedEffect === '3d-flip') config.flip_direction=inputValue('trans-flip-direction','left'); if (selectedEffect === 'text-mask-reveal') { config.mask_title=inputValue('trans-mask-title','DISCOVER'); config.mask_scale=inputValue('trans-mask-scale','2.1'); } transitions[String(activeTransitionTarget)] = config; const target = activeTransitionTarget; refreshAllPanels(); selectPage(target, false); closeTransitionModal(); runPageMotion(target); showToast(`${effectLabel(config.effect)} is now on page ${String(target).padStart(2,'0')}.`); }
+        function clearTransition() { if (!activeTransitionTarget) return; delete transitions[String(activeTransitionTarget)]; const target=activeTransitionTarget; refreshAllPanels(); selectPage(target,false); closeTransitionModal(); showToast('Motion cleared from this page.'); }
+        function runPageMotion(pageNumber) { const page = document.getElementById(`editor-page-${pageNumber}`), frame = document.getElementById(`page-frame-${pageNumber}`), shell = document.getElementById(`page-shell-${pageNumber}`); if (!page || !getTransition(pageNumber).effect) return; frame.classList.remove('motion-play'); shell.classList.remove('motion-play'); void frame.offsetWidth; frame.classList.add('motion-play'); if (getTransition(pageNumber).effect === 'color-bleed') shell.classList.add('motion-play'); }
+        function playPreview() { const activePages = pdfData.filter(page => getTransition(page.number).effect); if (!activePages.length) { showToast('Add a transition between pages, then replay it here.'); return; } activePages.forEach((page,index) => setTimeout(() => runPageMotion(page.number), index * 170)); showToast('Replaying your scroll choreography.'); }
+        function showToast(message) { const toast = document.getElementById('toast'); toast.textContent = message; toast.classList.add('show'); clearTimeout(toastTimer); toastTimer = setTimeout(() => toast.classList.remove('show'), 3400); }
+        function resetProject() { if (!confirm('Start a new project? Your current unsaved canvas will be cleared.')) return; pdfData=[]; customLinks=[]; transitions={}; selectedPage=1; document.getElementById('workspace-panel').classList.add('hidden'); document.getElementById('uploader-panel').classList.remove('hidden'); document.getElementById('drop-prompt').classList.remove('hidden'); uploadStatus.classList.add('hidden'); fileInput.value=''; document.getElementById('new-project-btn').classList.add('hidden'); document.getElementById('preview-button').classList.add('hidden'); document.getElementById('export-button').classList.add('hidden'); document.getElementById('header-project').textContent='UNTITLED PROJECT / READY TO IMPORT'; showToast('Fresh canvas ready.'); }
+        async function triggerBuild() { if (!pdfData.length) return; const button = document.getElementById('export-button'); const original = button.innerHTML; button.disabled=true; button.innerHTML='<span class="btn-words">Compiling website…</span>'; try { const payload = { layout_mode:document.getElementById('layout-mode').value, meta_title:document.getElementById('meta-title').value, meta_desc:document.getElementById('meta-desc').value, ga_id:document.getElementById('ga-id').value, form_action:document.getElementById('form-action').value, pages:pdfData, transitions, custom_links:customLinks }; const response = await fetch('/compile',{ method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(payload) }); if (!response.ok) { let message='The website could not be compiled.'; try { message=(await response.json()).error || message; } catch (_) {} throw new Error(message); } const blob=await response.blob(); const url=URL.createObjectURL(blob); const anchor=document.createElement('a'); anchor.href=url; anchor.download=payload.layout_mode==='single'?'index.html':'website_files.zip'; document.body.appendChild(anchor); anchor.click(); anchor.remove(); URL.revokeObjectURL(url); showToast(payload.layout_mode==='single'?'index.html is ready to deploy.':'Your multi-page website bundle is ready.'); } catch(error) { showToast(error.message || 'The website could not be compiled.'); } finally { button.disabled=false; button.innerHTML=original; } }
     </script>
 </body>
 </html>
