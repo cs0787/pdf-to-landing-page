@@ -7,7 +7,6 @@ import traceback
 import html
 from flask import Flask, request, render_template, redirect, url_for, flash, Response, jsonify
 import fitz  # PyMuPDF
-import { Analytics } from "@vercel/analytics/next"
 from PIL import Image
 
 # EXPLICIT TEMPLATE PATH RESOLUTION FOR VERCEL SERVERLESS ENVS
